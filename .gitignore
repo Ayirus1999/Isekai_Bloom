@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# local caches and logs
+.vite/
+coverage/
+*.log
+
+# secrets and local overrides
+.env
+.env.*
+!.env.example
+
+# editor / OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*.local
+
+# Freebuff Desktop project metadata
+.freebuff/

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hoshi no Hanabira: Isekai Bloom</title>
+    <meta
+      name="description"
+      content="An anime-inspired 2D auto-combat roguelite set in the colorful isekai world of Asteria."
+    />
+  </head>
+  <body>
+    <div id="app">
+      <div id="shell">
+        <canvas id="game" width="1280" height="720" aria-label="Combat viewport"></canvas>
+        <div class="vignette" aria-hidden="true"></div>
+
+        <!-- ===== Combat HUD ===== -->
+        <div id="hud" class="hud is-hidden">
+          <div class="hud-left">
+            <div class="hero-chip">
+              <div class="hero-chip-art">
+                <img id="hud-portrait" alt="" />
+              </div>
+              <div class="hero-chip-body">
+                <span id="hud-hero-name" class="hero-chip-name">Yuzuki Hoshino</span>
+                <div class="hp-track">
+                  <div id="hud-hp-fill" class="hp-fill"></div>
+                  <span id="hud-hp-text" class="hp-text">0 / 0</span>
+                </div>
+              </div>
+            </div>
+            <div id="hud-buffs" class="buff-row"></div>
+          </div>
+
+          <div class="hud-center">
+            <span id="hud-stage-label" class="stage-label">Stage 1 / 10</span>
+            <span id="hud-stage-name" class="stage-name">Blossom Meadow</span>
+            <div class="progress-track">
+              <div id="hud-stage-fill" class="progress-fill"></div>
+            </div>
+            <span id="hud-progress-text" class="progress-text">Awaiting the rift</span>
+          </div>
+
+          <div class="hud-right">
+            <button id="btn-speed" class="hud-btn speed-btn" type="button" title="Toggle game speed (T)">
+              <span id="speed-label">1&times;</span>
+            </button>
+            <button id="btn-pause" class="hud-btn" type="button" title="Pause (Esc)">
+              <span aria-hidden="true">❚❚</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ===== Boss health ===== -->
+        <div id="boss-bar" class="boss-bar is-hidden">
+          <div class="boss-bar-head">
+            <span class="boss-kicker">Guardian of the rift</span>
+            <span id="boss-name" class="boss-name">The Thorn Queen</span>
+          </div>
+          <div class="boss-track"><div id="boss-fill" class="boss-fill"></div></div>
+          <span id="boss-phase" class="boss-phase">Phase I</span>
+        </div>
+
+        <!-- ===== Stage banner ===== -->
+        <div id="banner" class="banner is-hidden">
+          <span id="banner-kicker" class="banner-kicker">Stage 1</span>
+          <span id="banner-title" class="banner-title">Blossom Meadow</span>
+        </div>
+
+        <!-- ===== Title screen ===== -->
+        <section id="screen-title" class="screen title-screen">
+          <div class="title-art" aria-hidden="true">
+            <img src="./assets/heroes/yuzuki-portrait.jpg" alt="" />
+          </div>
+          <div class="title-copy">
+            <p class="eyebrow">星の花びら</p>
+            <h1 class="game-title">Hoshi no Hanabira</h1>
+            <p class="game-subtitle">Isekai Bloom</p>
+            <p class="tagline">
+              Beautiful heroines. Automatic combat. Meaningful choices.
+            </p>
+            <nav class="menu">
+              <button class="btn primary" type="button" data-action="play">Begin Run</button>
+              <button class="btn" type="button" data-action="heroes">Heroines</button>
+            </nav>
+            <p class="build-note">Phase 1 build &middot; Yuzuki Hoshino playable</p>
+          </div>
+        </section>
+
+        <!-- ===== Heroine roster ===== -->
+        <section id="screen-heroes" class="screen roster-screen is-hidden">
+          <header class="screen-head">
+            <button class="btn ghost" type="button" data-action="back">&larr; Back</button>
+            <div>
+              <p class="eyebrow">The Blossom Guardians</p>
+              <h2>Heroine Roster</h2>
+            </div>
+            <span class="head-spacer" aria-hidden="true"></span>
+          </header>
+          <div id="hero-grid" class="hero-grid"></div>
+          <div id="hero-detail" class="hero-detail is-hidden">
+            <button class="btn ghost detail-close" type="button" data-action="close-detail">&times;</button>
+            <div id="hero-detail-body" class="hero-detail-body"></div>
+          </div>
+        </section>
+
+        <!-- ===== Pause ===== -->
+        <section id="screen-pause" class="screen overlay is-hidden">
+          <div class="panel">
+            <p class="eyebrow">The petals hold still</p>
+            <h2>Paused</h2>
+            <nav class="menu vertical">
+              <button class="btn primary" type="button" data-action="resume">Resume</button>
+              <button class="btn" type="button" data-action="restart">Restart Run</button>
+              <button class="btn" type="button" data-action="quit">Quit to Title</button>
+              <button class="btn ghost" type="button" data-action="mute">
+                <span id="mute-label">Sound: On</span>
+              </button>
+            </nav>
+          </div>
+        </section>
+
+        <!-- ===== Results ===== -->
+        <section id="screen-results" class="screen overlay is-hidden">
+          <div class="panel results-panel">
+            <p id="results-kicker" class="eyebrow">Run complete</p>
+            <h2 id="results-title">Victory</h2>
+            <p id="results-subtitle" class="results-subtitle">The rift falls silent.</p>
+            <dl id="results-stats" class="stats-grid"></dl>
+            <nav class="menu horizontal">
+              <button class="btn primary" type="button" data-action="retry">Retry Run</button>
+              <button class="btn" type="button" data-action="quit">Return to Title</button>
+            </nav>
+          </div>
+        </section>
+
+        <div id="loading" class="screen loading-screen">
+          <div class="loading-inner">
+            <p class="eyebrow">星の花びら</p>
+            <p class="loading-text">Gathering star petals&hellip;</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
