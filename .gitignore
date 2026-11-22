@@ -24,3 +24,6 @@ Thumbs.db
 
 # Freebuff Desktop project metadata
 .freebuff/
+
+# local dev server pid
+.devserver.pid

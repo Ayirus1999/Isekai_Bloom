@@ -1,9 +1,96 @@
 # Development log
 
 Chronological record of the build. Each entry describes what was actually implemented, the
-decisions taken, problems hit, and how they were verified.
+decisions taken, problems hit, and how they were verified. Entries before 2026-11-22 “encounter
+roguelite rebuild” describe the superseded stage-runner prototype.
 
 ---
+
+## 2026-11-22 — Encounter roguelite rebuild and Android shell
+
+**Implemented**
+
+- Rebuilt the run from a continuous wave/stage runner into a **ten-encounter adventure**: six group
+  fights, events at 3 and 8, a solo mini-boss at 5 and a solo final boss at 10, with a heal between
+  encounters.
+- Group encounters now spawn 3–8 fully independent enemies with separate hp, defence, timers,
+  freeze/slow, shields, death state and rewards.
+- Boss encounters are hard-sliced to one entity in `World.spawnEncounter`; boss summons were removed
+  and replaceable/add behaviour is a verified no-op. Boss patterns: sweep, volley, slam, beam,
+  meteor, drain; phase two at 50% health.
+- Six original heroines (Yuzuki, Akari, Shiori, Miyu, Rin, Airi) with stats, ranges, weapons,
+  five-ability kits and distinct palettes/hair/outfits.
+- Five data-driven worlds with their own palettes, motifs, enemy pools, scaling, mini-boss, final
+  boss and coin price.
+- 48 upgrades across offense, defence, magic, special and heroine pools; five rarities;
+  depth-weighted offers; stack caps; six pair evolutions; guaranteed evolution offer when ready.
+- Astral Coins, five permanent upgrade families, heroine/world unlocks, achievements, lifetime stats,
+  settings and a versioned localStorage save.
+- New procedural heroine rig with clip events: idle breathing/blink/hair/skirt, basics with
+  anticipation/lunge/impact/recovery, casts, areas, buffs, heals, shields, hurt, ultimate, victory
+  and defeat. Damage/projectiles/areas/heals resolve from clip events at simulated timestamps.
+- Boss silhouettes for Thorn Queen, Crystal Dragon, Fallen Guardian, Shadow Empress, Corrupted
+  Celestial and four mini-bosses; normal-enemy archetypes, telegraph rings, hit flash, death fade.
+- Portrait camera with compressed far lane, larger sprites, shared x-mapping for projectiles/effects
+  and a full-width encounter HUD row. Safe-area CSS and 44 px touch targets.
+- Capacitor 8 Android shell, portrait-locked activity, custom app icon/splash, cross-platform APK
+  build script and the debug APK.
+- Documentation set rewritten: README, design, architecture, animation guidelines, platform
+  compatibility, roadmap, changelog, contributing and asset credits.
+
+**Problems and fixes**
+
+- **Boss DPS collapse:** every enemy hit used to interrupt Yuzuki's attack, so a boss with frequent
+  chip damage silently cancelled most of her damage. Committed basics/casts now keep their timing;
+  flinch plays only between actions. Ultimate actions were already locked.
+- **Boss health wall:** stage health/damage scaling was being applied on top of boss stats. Bosses now
+  use their own multipliers (×0.42 HP, ×0.88 damage) and ignore encounter scaling.
+- **Wrong clear count:** events did not increment `encountersCleared`, so a victory could read 8/10.
+  Events now count; the Android run verified 10/10.
+- **Portrait spacing:** uniformly shrinking the 1280×720 arena made characters tiny and enemies
+  overlap. The portrait camera preserves near-field scale and compresses only the far lane, with one
+  mapper for characters, projectiles, impacts and effects.
+- **Encounter chip disappeared:** the portrait HUD grid hid it; it now wraps to a full-width row.
+- **Shield damage accounting:** absorbed damage is included in damage taken.
+- **Old art pipeline:** the generated JPG heroine/key art and chroma-keyed sprite were removed because
+  they conflicted with the animated rig; the repo now contains no character bitmaps except the app
+  icon.
+- **Save robustness:** loading merges defaults, filters unknown unlocks and survives malformed JSON
+  or unavailable storage.
+
+**Verification**
+
+- `npm run typecheck` — pass; `npm test` — **54/54 pass**; `npm run build` — pass.
+- Headless balance sweep with auto-first-card picks: five of six heroines cleared Blossom Meadow;
+  Akari fell to the elite encounter. This is a naive-player baseline, not final balance.
+- Browser: complete Blossom Meadow victory, nine upgrades chosen, 2× toggle, results and save
+  persistence across reload.
+- Android: debug APK installed on a 1080×2400 **Android 16 / API 36 emulator**. Real `adb` taps
+  navigated title → world → heroine → battle, toggled 1×/2×, paused/resumed, chose upgrades, and
+  reached both boss encounters. Full result: **10/10 encounters, 28 enemies, 2 guardians, 19,351
+  damage dealt, 2,190 taken, 2:25, 1,410 coins, 3 achievements**. Force-stop/relaunch restored the
+  save; Home/reopen preserved the session.
+- Android visual caveat: a headless ANGLE emulator omitted every canvas layer from screenshots (a
+  synthetic canvas was also invisible). Restarting windowed with host GPU produced correct frames.
+  The Android screenshots in the repo come from the windowed run. This is documented in
+  `PLATFORM_COMPATIBILITY.md` so it is not mistaken for a game defect.
+- First Android launch logged three non-fatal Capacitor SystemBars “safe area CSS” injection errors
+  before the document root existed; the app rendered and the errors did not recur after the final
+  install. The WebView is already inset by the system bars.
+
+**Remaining**
+
+- Physical Android testing (small/mid-range phones), real notches/gestures/audio focus.
+- iOS build: blocked by Windows, no Xcode/signing/provisioning.
+- Performance, memory, thermal and battery profiling; define measured device tiers.
+- Production-quality painted art and bespoke per-heroine animation.
+- Cross-browser testing beyond the bundled Chromium.
+
+---
+
+# Earlier prototype history (superseded)
+
+These entries describe the Original stage-runner prototype that was replaced by the encounter rebuild above. They are kept as an honest record of the project chronology.
 
 ## 2026-11-22 — Phase 0: repository foundation
 
@@ -84,7 +171,7 @@ decisions taken, problems hit, and how they were verified.
   heroine positions and stage timers, defeat triggers on zero health, victory triggers after the
   last stage.
 - Manual browser run: menus, roster detail, a live run through stages 1–3 with abilities, wave
-  clearing and HUD updates; captured `docs/screenshots/phase1-battle.png`.
+  clearing and HUD updates; captured a prototype screenshot (removed in the encounter rebuild).
 
 **Remaining**
 
