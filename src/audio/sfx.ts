@@ -88,6 +88,8 @@ class SoundBoard {
   }
 
   private ensure(): AudioContext | null {
+    // Guard keeps the simulation importable in headless tests where there is no window.
+    if (typeof window === 'undefined') return null;
     if (this.context) return this.context;
     const Ctor: AudioContextCtor | undefined =
       window.AudioContext ??

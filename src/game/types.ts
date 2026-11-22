@@ -103,3 +103,47 @@ export interface HeroineDef {
   locked: boolean;
   unlockHint: string;
 }
+
+export type EnemyShape =
+  | 'slime'
+  | 'sprite'
+  | 'bunny'
+  | 'mushroom'
+  | 'beetle'
+  | 'flame'
+  | 'knight'
+  | 'golem'
+  | 'wolf'
+  | 'treant'
+  | 'guardian'
+  | 'queen';
+
+export type EnemyTier = 'normal' | 'elite' | 'boss';
+
+export type EnemyBehavior = 'chaser' | 'ranged' | 'boss';
+
+/** Data definition for one enemy archetype. Stats are per-unit before stage scaling. */
+export interface EnemyDef {
+  id: string;
+  name: string;
+  shape: EnemyShape;
+  element: ElementId;
+  color: string;
+  accent: string;
+  maxHp: number;
+  /** Ground speed in pixels per simulated second. */
+  speed: number;
+  damage: number;
+  /** Distance at which the enemy stops and attacks. */
+  attackRange: number;
+  /** Seconds between attacks. */
+  attackCooldown: number;
+  /** Body half-width used for hit detection. */
+  radius: number;
+  /** Drawn height in pixels. */
+  height: number;
+  behavior: EnemyBehavior;
+  projectileSpeed: number;
+  tier: EnemyTier;
+  defense: number;
+}
