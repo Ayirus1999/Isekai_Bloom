@@ -174,7 +174,7 @@ for the design and [docs/DEVLOG.md](docs/DEVLOG.md) for the build record.
 | Phone browser viewport (390 × 844 emulation) | **Partially tested** | Portrait HUD, group battle, upgrade cards and results inspected; touch input was not exercised on a physical device |
 | Other phone sizes (narrow/wide/tablet) | **Not tested** | Responsive breakpoints exist but were not exhaustively checked |
 | Firefox / Safari / Edge | **Not tested** | No compatibility claims |
-| Android 16 emulator (API 36, 1080 × 2400) | **Tested (emulator)** | Debug APK installed; full 10/10 victory via real touch input; solo mini-boss and final boss; save survived force-stop/relaunch |
+| Android 16 emulator (API 36, 1080 × 2400) | **Tested (emulator)** | Debug APK installed; full 10/10 victory; real touch menus/speed/pause/first upgrade, later upgrades auto-picked; solo bosses; save survived force-stop/relaunch |
 | Physical Android phone/tablet | **Not tested** | No device attached; notches, gestures and real performance unverified |
 | iOS / iPadOS build | **Blocked** | No macOS/Xcode, signing certificate, provisioning profile or device; no IPA produced |
 | Performance / 60 FPS / batteries | **Not measured** | The canvas loop is lightweight, but no frame-time, thermal or device measurements exist |
