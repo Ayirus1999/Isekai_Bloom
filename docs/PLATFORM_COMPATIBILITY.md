@@ -9,7 +9,7 @@ is expected to support. Update it only with real evidence.
 | --- | --- | --- | --- |
 | Desktop Chromium | `npm run build` static bundle | **Tested** | Full title → world → heroine → group fights → upgrades → solo mini-boss → solo final boss → victory → results; save persisted across reload |
 | Mobile browser viewport (390 × 844) | Same bundle | **Partially tested** | Portrait HUD, group combat, stacked upgrades and results inspected in Chromium emulation; no physical phone browser was used |
-| Android | Capacitor 8 debug APK | **Tested on emulator** | Installed and completed a full run on Android 16 / API 36 emulator; all touch steps below used real `adb` taps |
+| Android | Capacitor 8 debug APK | **Tested on emulator** | Installed and completed a full run on Android 16 / API 36 emulator; menus, speed, pause and the first upgrade used real `adb` taps, while later upgrade offers were auto-picked to finish the run |
 | Android physical device | Same APK | **Not tested** | No physical Android device attached |
 | iOS / iPadOS | None | **Blocked** | Windows host; no macOS/Xcode, signing certificate, provisioning profile or device |
 | Firefox / Safari / Edge | Same web bundle | **Not tested** | No compatibility claim |
@@ -58,7 +58,9 @@ Performed with the debug APK installed via `adb install -r`:
 
 - Launch, title screen, world select, roster and heroine detail.
 - **Real touch input** for: Begin Adventure, Enter rift, heroine card, Fight with Yuzuki, speed toggle,
-  pause, Resume, and upgrade cards.
+  pause, Resume, and the first upgrade card. Later upgrade offers in the full run were clicked
+  programmatically through the WebView so the test could reach both bosses in one sitting; those
+  selections were not themselves touch-tested.
 - Group encounter with **3 independent slimes**, each with its own health bar; 4-enemy encounter also
   observed.
 - **Solo mini-boss** (“The Seal Holds”, The Thorn Guardian): exactly **1 remaining** throughout,
