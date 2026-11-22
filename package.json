@@ -1,0 +1,37 @@
+{
+  "name": "hoshi-no-hanabira",
+  "version": "0.2.0",
+  "private": true,
+  "description": "An anime-inspired auto-battler roguelite set in a colorful isekai fantasy world. Build powerful heroines, discover skill evolutions and explore the world of Asteria.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ayirus1999/Isekai_Bloom.git"
+  },
+  "homepage": "https://github.com/Ayirus1999/Isekai_Bloom#readme",
+  "bugs": {
+    "url": "https://github.com/Ayirus1999/Isekai_Bloom/issues"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "simulate": "vite-node scripts/simulate.ts --all",
+    "cap:sync": "npm run build && cap sync android",
+    "android:apk": "npm run cap:sync && node scripts/android-build.mjs"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^4.0.0",
+    "@capacitor/cli": "^8.6.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vite-node": "^6.0.0",
+    "vitest": "^5.1.1"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2"
+  }
+}
