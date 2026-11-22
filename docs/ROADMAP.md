@@ -44,9 +44,10 @@ Status labels: **Not Started** · **In Progress** · **Completed** · **Blocked*
 
 - The speed control and pause are properties of `SimulationClock`, verified by
   `tests/simulation.test.ts` (2× simulated time, frozen positions while paused, resume continuity).
-- Victory and defeat are covered by headless simulation tests as well as manual play through the
-  first stages; the full ten-stage run was not played to completion by hand before release, so the
-  late-stage balance is still provisional.
+- Victory and defeat are covered by headless simulation tests, and both a 1× and a 2× ten-stage run
+  were then played to completion in the browser (victory, 10 / 10 stages, both bosses). Those runs
+  drove the balance and pacing repairs listed in the changelog; upgrading the run for replay value
+  waits on Phase 2.
 
 ---
 

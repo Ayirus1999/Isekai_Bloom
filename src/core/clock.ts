@@ -9,8 +9,12 @@
 /** Supported simulation multipliers. */
 export type TimeScale = 1 | 2;
 
-/** Longest real-time step accepted, so a background tab does not fast-forward the run. */
-const MAX_REAL_STEP = 0.05;
+/**
+ * Longest real-time step accepted. A stalled tab must not fast-forward the run, but the cap also
+ * has to stay above one frame at 10 fps: otherwise the simulation silently runs in slow motion on
+ * a slow machine (observed at ~9 fps during browser testing, where 0.05 halved the game speed).
+ */
+const MAX_REAL_STEP = 0.1;
 
 export class SimulationClock {
   /** Total simulated seconds elapsed since the run began. */

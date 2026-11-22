@@ -6,6 +6,18 @@ the project reaches a stable release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Bosses no longer receive stage health and damage scaling on top of their own stats, which had
+  turned the Thorn Queen into a 9,240 HP wall; she is now 2,800 HP / 22 damage and the Crystal Golem
+  2,400 / 38, so the final fight is winnable without upgrades.
+- Frame deltas are clamped at 0.1 s instead of 0.05 s, so a machine running below 20 fps no longer
+  plays the whole game in slow motion.
+- Waves wait for the arena to clear (18 s grace) and each cleared wave restores 20% health, removing
+  the elite pile-ups that ended otherwise healthy runs on stage 9.
+- Eased late-stage health and damage scaling, raised the stage-clear heal to 55%, and set Yuzuki to
+  1,350 HP / 48 attack so a no-upgrade run is completable.
+
 ### Planned
 
 - Three-choice upgrade system with rarity, stacking and evolutions.

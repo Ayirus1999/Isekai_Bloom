@@ -155,9 +155,13 @@ function updateBoss(
   if (!isGolem) {
     enemy.summonTimer -= delta;
     if (enemy.summonTimer <= 0) {
-      enemy.summonTimer = 9.5;
-      world.summonAdds(enemy, 3);
-      sfx.play('boss');
+      enemy.summonTimer = 12;
+      // Cap the brood: uncontrolled summons turned the boss into an endless damage aura.
+      const brood = world.enemies.filter((other) => other.def.tier !== 'boss' && other.alive).length;
+      if (brood < 4) {
+        world.summonAdds(enemy, 2);
+        sfx.play('boss');
+      }
     }
   }
 

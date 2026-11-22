@@ -24,9 +24,9 @@ export const HEROINES: HeroineDef[] = [
       'read a page. When the first rift opened over the meadow she descended without being asked, ' +
       'katana already drawn, and has not yet found a reason to go home.',
     stats: {
-      maxHp: 1200,
-      attack: 34,
-      attackSpeed: 1.5,
+      maxHp: 1350,
+      attack: 48,
+      attackSpeed: 1.6,
       critChance: 0.18,
       critDamage: 1.9,
       moveSpeed: 218,

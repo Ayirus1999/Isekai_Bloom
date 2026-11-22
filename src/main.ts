@@ -16,6 +16,11 @@ async function boot(): Promise<void> {
 
   let paused = false;
 
+  // Development-only handle so a manual browser session can be inspected while playing.
+  if (import.meta.env.DEV) {
+    (window as Window & { __hnh?: { world: World } }).__hnh = { world };
+  }
+
   const ui = new Ui({
     onPlay: (heroineId) => beginRun(heroineId),
     onResume: () => setPaused(false),
