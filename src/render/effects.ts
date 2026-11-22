@@ -2,9 +2,13 @@ import { GROUND_Y } from '../game/constants';
 import type { Impact, Projectile, VisualEffect } from '../game/world';
 import { hexToRgba } from './hero';
 
-export function drawImpacts(ctx: CanvasRenderingContext2D, impacts: readonly Impact[], cameraX: number): void {
+export function drawImpacts(
+  ctx: CanvasRenderingContext2D,
+  impacts: readonly Impact[],
+  mapX: (x: number) => number,
+): void {
   for (const impact of impacts) {
-    const x = impact.x - cameraX;
+    const x = mapX(impact.x);
     const progress = Math.max(0, Math.min(1, 1 - impact.delay / Math.max(0.001, impact.total)));
     const hostile = impact.from === 'enemy';
     const base = hostile ? '#ff7b8f' : impact.color;
@@ -36,10 +40,10 @@ export function drawImpacts(ctx: CanvasRenderingContext2D, impacts: readonly Imp
 export function drawProjectiles(
   ctx: CanvasRenderingContext2D,
   projectiles: readonly Projectile[],
-  cameraX: number,
+  mapX: (x: number) => number,
 ): void {
   for (const projectile of projectiles) {
-    const x = projectile.x - cameraX;
+    const x = mapX(projectile.x);
     const y = projectile.y;
     ctx.save();
 
@@ -84,10 +88,11 @@ export function drawProjectiles(
 export function drawEffects(
   ctx: CanvasRenderingContext2D,
   effects: readonly VisualEffect[],
-  cameraX: number,
+  mapX: (x: number) => number,
+  textScale = 1,
 ): void {
   for (const effect of effects) {
-    const x = effect.x - cameraX;
+    const x = mapX(effect.x);
     const alpha = Math.max(0, effect.life / effect.max);
 
     if (effect.kind === 'spark') {
@@ -127,8 +132,8 @@ export function drawEffects(
       ctx.save();
       ctx.globalAlpha = Math.min(1, alpha * 1.5);
       ctx.font = effect.crit
-        ? '700 30px "Iowan Old Style", Palatino, Georgia, serif'
-        : '600 21px "Segoe UI", system-ui, sans-serif';
+        ? `700 ${30 * textScale}px "Iowan Old Style", Palatino, Georgia, serif`
+        : `600 ${21 * textScale}px "Segoe UI", system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.lineWidth = 4;
       ctx.strokeStyle = 'rgba(10, 8, 20, 0.75)';

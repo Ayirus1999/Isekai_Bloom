@@ -1,74 +1,148 @@
 import './style.css';
 import { sfx } from './audio/sfx';
 import { getHeroine } from './data/heroines';
+import { UPGRADES } from './data/upgrades';
+import { getWorld } from './data/worlds';
+import { grantAchievement, loadSave, permanentBonuses, persist, recordRun, unlockHeroine, unlockWorld, buyPermanent } from './game/save';
+import { rollUpgradeChoices } from './game/upgrades';
 import { World } from './game/world';
-import { loadAssets } from './render/assets';
+import type { HeroineId, WorldId } from './game/types';
 import { Renderer } from './render/renderer';
-import { Ui, bindCombatControls } from './ui/screens';
+import { Ui } from './ui/screens';
 
 async function boot(): Promise<void> {
   const canvas = document.querySelector<HTMLCanvasElement>('#game');
   if (!canvas) throw new Error('Missing game canvas');
 
-  const assets = await loadAssets();
-  const world = new World(getHeroine('yuzuki'));
-  const renderer = new Renderer(canvas, assets);
+  const save = loadSave();
+  sfx.setMuted(save.settings.muted);
 
+  const world = new World();
+  const renderer = new Renderer(canvas);
   let paused = false;
-
-  // Development-only handle so a manual browser session can be inspected while playing.
-  if (import.meta.env.DEV) {
-    (window as Window & { __hnh?: { world: World } }).__hnh = { world };
-  }
+  let selectedWorld = 'blossom';
+  let selectedHeroine = 'yuzuki';
 
   const ui = new Ui({
-    onPlay: (heroineId) => beginRun(heroineId),
-    onResume: () => setPaused(false),
-    onRestart: () => beginRun(world.hero.def.id),
+    onPlay: () => {
+      sfx.play('click');
+      ui.showWorlds(save);
+    },
+    onHeroines: () => {
+      sfx.play('click');
+      ui.showHeroes(selectedWorld, save);
+    },
+    onSanctum: () => {
+      sfx.play('click');
+      ui.showSanctum(save);
+    },
+    onBackTitle: () => ui.showTitle(),
+    onBackWorlds: () => ui.showWorlds(save),
+    onWorldChosen: (worldId) => {
+      selectedWorld = worldId;
+      sfx.play('click');
+      ui.showHeroes(worldId, save);
+    },
+    onStart: (worldId, heroineId) => startRun(worldId, heroineId),
+    onPickUpgrade: (id) => pickUpgrade(id),
+    onRetry: () => startRun(selectedWorld, selectedHeroine),
+    onRestart: () => startRun(selectedWorld, selectedHeroine),
     onQuit: () => quitToTitle(),
+    onResume: () => setPaused(false),
     onToggleSpeed: () => toggleSpeed(),
     onTogglePause: () => setPaused(!paused),
     onToggleMute: () => {
       sfx.setMuted(!sfx.isMuted);
+      save.settings.muted = sfx.isMuted;
+      persist(save);
       ui.setMuted(sfx.isMuted);
+    },
+    onBuyPermanent: (id) => {
+      if (buyPermanent(save, id)) {
+        sfx.play('buff');
+        ui.showSanctum(save);
+      }
+    },
+    onUnlockHeroine: (id) => {
+      if (unlockHeroine(save, id as HeroineId)) {
+        sfx.play('buff');
+        ui.showHeroes(selectedWorld, save);
+        ui.openHeroDetail(id, save);
+      }
+    },
+    onUnlockWorld: (id) => {
+      if (unlockWorld(save, id as WorldId)) {
+        sfx.play('buff');
+        ui.showWorlds(save);
+      }
     },
   });
 
-  world.onStageStart = (stage, index) => {
-    ui.showBanner(`Stage ${index + 1}`, stage.name, 1900);
-  };
-  world.onStageCleared = (stage) => {
-    ui.showBanner('Rift sealed', stage.name, 1600);
+  world.onEncounterStart = (encounter, index) => {
+    ui.banner(
+      `Encounter ${index + 1} of ${world.encounterCount}`,
+      `${encounter.title} · ${encounter.subtitle}`,
+      2000,
+    );
   };
   world.onBossSpawn = (name) => {
-    ui.showBanner('Guardian of the rift', name, 2400);
+    ui.banner('Rift guardian', name, 2400);
+    world.cinematic = 1.1;
     sfx.play('boss');
   };
   world.onBossPhase = (name) => {
-    ui.showBanner('Second phase', name, 1800);
+    ui.banner('Second phase', name, 1700);
     sfx.play('boss');
   };
+  world.onReward = (encounter, index) => {
+    const offers = rollUpgradeChoices(world.hero.def.id, world.owned, index, world.rng, 3);
+    ui.showUpgrades(offers, `${encounter.title} — ${encounter.subtitle}`);
+  };
   world.onRunEnd = (victory) => {
-    paused = false;
-    ui.setPaused(false);
-    ui.showResults({ ...world.getResults(victory) });
+    const results = world.getResults(victory);
+    save.settings.speed = world.clock.scale;
+    const newAchievements = recordRun(save, {
+      victory,
+      coins: results.coins,
+      enemiesDefeated: results.enemiesDefeated,
+      bossesDefeated: results.bossesDefeated,
+      bestEncounter: results.encountersCleared,
+    });
+    persist(save);
+    ui.showResults({ ...results, totalCoins: save.coins, newAchievements });
+    sfx.play(victory ? 'clear' : 'death');
   };
 
-  function beginRun(heroineId: string): void {
+  function startRun(worldId: string, heroineId: string): void {
     const heroine = getHeroine(heroineId);
-    if (heroine.locked) return;
-    world.startRun(heroine);
+    const worldDef = getWorld(worldId);
+    selectedWorld = worldId;
+    selectedHeroine = heroineId;
     paused = false;
-    ui.hideResults();
-    ui.setPaused(false);
+    ui.setHeroine(heroine);
     ui.showCombat();
-    ui.setSpeedLabel(world.clock.scale);
+    ui.setSpeed(save.settings.speed);
+    world.startRun(heroine, worldDef, permanentBonuses(save));
+    world.clock.setScale(save.settings.speed);
     sfx.play('click');
   }
 
+  function pickUpgrade(id: string): void {
+    const def = UPGRADES.find((entry) => entry.id === id);
+    if (!def || world.status !== 'reward') return;
+    world.chooseUpgrade(def);
+    if (def.evolved && grantAchievement(save, 'evolved')) persist(save);
+    ui.setHeroine(world.hero.def);
+    ui.setSpeed(world.clock.scale);
+    if (world.status !== 'reward') {
+      ui.showCombat();
+      world.clock.resume();
+    }
+    sfx.play('buff');
+  }
+
   function setPaused(next: boolean): void {
-    if (world.status !== 'combat') return;
-    if (next === paused) return;
+    if (world.status !== 'combat' && world.status !== 'clearing') return;
     paused = next;
     if (next) world.clock.pause();
     else world.clock.resume();
@@ -78,7 +152,9 @@ async function boot(): Promise<void> {
 
   function toggleSpeed(): void {
     const scale = world.clock.toggleScale();
-    ui.setSpeedLabel(scale);
+    save.settings.speed = scale;
+    persist(save);
+    ui.setSpeed(scale);
     sfx.play('click');
   }
 
@@ -87,18 +163,14 @@ async function boot(): Promise<void> {
     world.clock.pause();
     paused = false;
     ui.setPaused(false);
-    ui.hideResults();
     ui.showTitle();
     sfx.play('click');
   }
 
-  bindCombatControls({
-    onSpeed: () => toggleSpeed(),
-    onPause: () => setPaused(!paused),
-  });
+  document.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
 
   window.addEventListener('keydown', (event) => {
-    if (world.status !== 'combat') return;
+    if (world.status !== 'combat' && world.status !== 'clearing') return;
     const key = event.key.toLowerCase();
     if (key === 'escape' || key === 'p') {
       event.preventDefault();
@@ -109,11 +181,19 @@ async function boot(): Promise<void> {
     }
   });
 
-  // Browsers only allow audio after a gesture; the first interaction unlocks the sound board.
-  document.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
+  window.addEventListener('beforeunload', () => {
+    save.settings.speed = world.clock.scale;
+    persist(save);
+  });
 
-  ui.setSpeedLabel(world.clock.scale);
+  // Dispose of the dev handle when a hot reload replaces the module.
+  if (import.meta.env.DEV) {
+    (window as Window & { __hnh?: { world: World; save: typeof save } }).__hnh = { world, save };
+  }
+
+  ui.setSpeed(save.settings.speed === 2 ? 2 : 1);
   ui.setMuted(sfx.isMuted);
+  ui.paintTitleArt(getHeroine('yuzuki'));
   ui.showTitle();
   ui.hideLoading();
 
@@ -123,14 +203,15 @@ async function boot(): Promise<void> {
     last = now;
     world.update(delta);
     renderer.draw(world, now / 1000, delta);
-    ui.updateHud(world.getHud());
+    if (world.status !== 'idle') ui.updateHud(world.getHud());
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
+
 }
 
 void boot().catch((error: unknown) => {
   console.error(error);
   const loadingText = document.querySelector('.loading-text');
-  if (loadingText) loadingText.textContent = 'Failed to load the meadow. Check the console.';
+  if (loadingText) loadingText.textContent = 'Failed to gather the petals. Check the console.';
 });

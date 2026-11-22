@@ -2,113 +2,154 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hoshi no Hanabira: Isekai Bloom</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="theme-color" content="#0b0818" />
     <meta
       name="description"
-      content="An anime-inspired 2D auto-combat roguelite set in the colorful isekai world of Asteria."
+      content="Hoshi no Hanabira: Isekai Bloom — an anime-inspired auto-battler roguelite set in the world of Asteria."
     />
+    <title>Hoshi no Hanabira: Isekai Bloom</title>
   </head>
   <body>
     <div id="app">
       <div id="shell">
-        <canvas id="game" width="1280" height="720" aria-label="Combat viewport"></canvas>
-        <div class="vignette" aria-hidden="true"></div>
+        <canvas id="game" aria-label="Automatic battle arena"></canvas>
 
-        <!-- ===== Combat HUD ===== -->
+        <!-- ============================ Battle HUD ============================ -->
         <div id="hud" class="hud is-hidden">
-          <div class="hud-left">
+          <div class="hud-top">
             <div class="hero-chip">
-              <div class="hero-chip-art">
-                <img id="hud-portrait" alt="" />
-              </div>
+              <canvas id="hud-portrait" class="hud-portrait" aria-hidden="true"></canvas>
               <div class="hero-chip-body">
-                <span id="hud-hero-name" class="hero-chip-name">Yuzuki Hoshino</span>
+                <div class="hero-chip-line">
+                  <span id="hud-hero-name" class="hero-chip-name"></span>
+                  <span id="hud-coins" class="coin-chip">0</span>
+                </div>
                 <div class="hp-track">
                   <div id="hud-hp-fill" class="hp-fill"></div>
-                  <span id="hud-hp-text" class="hp-text">0 / 0</span>
+                  <span id="hud-hp-text" class="hp-text"></span>
                 </div>
+                <div id="hud-chips" class="chip-row"></div>
               </div>
             </div>
-            <div id="hud-buffs" class="buff-row"></div>
-          </div>
 
-          <div class="hud-center">
-            <span id="hud-stage-label" class="stage-label">Stage 1 / 10</span>
-            <span id="hud-stage-name" class="stage-name">Blossom Meadow</span>
-            <div class="progress-track">
-              <div id="hud-stage-fill" class="progress-fill"></div>
+            <div class="encounter-chip">
+              <span id="hud-encounter" class="kicker"></span>
+              <span id="hud-encounter-title" class="encounter-title"></span>
+              <div class="progress-track"><div id="hud-progress-fill" class="progress-fill"></div></div>
+              <span id="hud-progress-label" class="muted"></span>
             </div>
-            <span id="hud-progress-text" class="progress-text">Awaiting the rift</span>
+
+            <div class="hud-actions">
+              <button id="btn-speed" class="hud-btn speed" type="button" aria-label="Toggle game speed"><span id="speed-label">1×</span></button>
+              <button id="btn-pause" class="hud-btn" type="button" aria-label="Pause">❚❚</button>
+            </div>
           </div>
 
-          <div class="hud-right">
-            <button id="btn-speed" class="hud-btn speed-btn" type="button" title="Toggle game speed (T)">
-              <span id="speed-label">1&times;</span>
-            </button>
-            <button id="btn-pause" class="hud-btn" type="button" title="Pause (Esc)">
-              <span aria-hidden="true">❚❚</span>
-            </button>
+          <div id="boss-bar" class="boss-bar is-hidden">
+            <div class="boss-head">
+              <span class="kicker">Rift guardian</span>
+              <span id="boss-name" class="boss-name"></span>
+              <span id="boss-phase" class="boss-phase"></span>
+            </div>
+            <div class="boss-track"><div id="boss-fill" class="boss-fill"></div></div>
+          </div>
+
+          <div class="hud-bottom">
+            <div id="upgrade-chips" class="upgrade-chips"></div>
           </div>
         </div>
 
-        <!-- ===== Boss health ===== -->
-        <div id="boss-bar" class="boss-bar is-hidden">
-          <div class="boss-bar-head">
-            <span class="boss-kicker">Guardian of the rift</span>
-            <span id="boss-name" class="boss-name">The Thorn Queen</span>
-          </div>
-          <div class="boss-track"><div id="boss-fill" class="boss-fill"></div></div>
-          <span id="boss-phase" class="boss-phase">Phase I</span>
+        <div id="banner" class="banner is-hidden" aria-live="polite">
+          <span id="banner-kicker" class="kicker"></span>
+          <span id="banner-title" class="banner-title"></span>
         </div>
 
-        <!-- ===== Stage banner ===== -->
-        <div id="banner" class="banner is-hidden">
-          <span id="banner-kicker" class="banner-kicker">Stage 1</span>
-          <span id="banner-title" class="banner-title">Blossom Meadow</span>
-        </div>
-
-        <!-- ===== Title screen ===== -->
+        <!-- ============================ Title ============================ -->
         <section id="screen-title" class="screen title-screen">
-          <div class="title-art" aria-hidden="true">
-            <img src="./assets/heroes/yuzuki-portrait.jpg" alt="" />
-          </div>
+          <div class="title-art-wrap"><canvas id="title-art" aria-hidden="true"></canvas></div>
           <div class="title-copy">
-            <p class="eyebrow">星の花びら</p>
-            <h1 class="game-title">Hoshi no Hanabira</h1>
-            <p class="game-subtitle">Isekai Bloom</p>
-            <p class="tagline">
-              Beautiful heroines. Automatic combat. Meaningful choices.
-            </p>
+            <p class="jp">星の花びら</p>
+            <h1>Hoshi no Hanabira</h1>
+            <p class="subtitle">Isekai Bloom</p>
+            <p class="tagline">Beautiful guardians fight on their own. You decide what they become.</p>
             <nav class="menu">
-              <button class="btn primary" type="button" data-action="play">Begin Run</button>
-              <button class="btn" type="button" data-action="heroes">Heroines</button>
+              <button class="btn primary" type="button" data-action="play">Begin Adventure</button>
+              <button class="btn" type="button" data-action="heroines">Blossom Guardians</button>
+              <button class="btn ghost" type="button" data-action="sanctum">Starlit Sanctum</button>
             </nav>
-            <p class="build-note">Phase 1 build &middot; Yuzuki Hoshino playable</p>
+            <p class="build-note">Phase 1 vertical slice · six original heroines · automatic combat</p>
           </div>
         </section>
 
-        <!-- ===== Heroine roster ===== -->
-        <section id="screen-heroes" class="screen roster-screen is-hidden">
+        <!-- ============================ Worlds ============================ -->
+        <section id="screen-worlds" class="screen list-screen is-hidden">
           <header class="screen-head">
-            <button class="btn ghost" type="button" data-action="back">&larr; Back</button>
-            <div>
-              <p class="eyebrow">The Blossom Guardians</p>
-              <h2>Heroine Roster</h2>
+            <button class="btn ghost back" type="button" data-action="back-title">← Title</button>
+            <div class="head-copy">
+              <p class="kicker">Choose a rift</p>
+              <h2>Adventures</h2>
             </div>
-            <span class="head-spacer" aria-hidden="true"></span>
+            <span id="world-coins" class="coin-chip"></span>
+          </header>
+          <div id="world-grid" class="world-grid"></div>
+        </section>
+
+        <!-- ============================ Heroines ============================ -->
+        <section id="screen-heroes" class="screen list-screen is-hidden">
+          <header class="screen-head">
+            <button class="btn ghost back" type="button" data-action="back-worlds">← Adventures</button>
+            <div class="head-copy">
+              <p class="kicker" id="heroes-world-label"></p>
+              <h2>Blossom Guardians</h2>
+            </div>
+            <span id="hero-coins" class="coin-chip"></span>
           </header>
           <div id="hero-grid" class="hero-grid"></div>
-          <div id="hero-detail" class="hero-detail is-hidden">
-            <button class="btn ghost detail-close" type="button" data-action="close-detail">&times;</button>
-            <div id="hero-detail-body" class="hero-detail-body"></div>
+
+          <div id="hero-detail" class="hero-detail is-hidden" role="dialog" aria-modal="true">
+            <button class="btn ghost detail-close" type="button" data-action="close-detail">×</button>
+            <div class="hero-detail-body">
+              <canvas id="detail-art" class="detail-art" aria-hidden="true"></canvas>
+              <div id="detail-copy" class="detail-copy"></div>
+            </div>
           </div>
         </section>
 
-        <!-- ===== Pause ===== -->
+        <!-- ============================ Upgrades ============================ -->
+        <section id="screen-upgrades" class="screen overlay upgrade-screen is-hidden">
+          <div class="upgrade-panel">
+            <p class="kicker" id="upgrade-kicker">Encounter cleared</p>
+            <h2>Choose a Star Petal</h2>
+            <p class="muted" id="upgrade-subtitle">One gift. Choose well.</p>
+            <div id="upgrade-cards" class="upgrade-cards"></div>
+          </div>
+        </section>
+
+        <!-- ============================ Results ============================ -->
+        <section id="screen-results" class="screen overlay is-hidden">
+          <div class="panel results-panel">
+            <p class="kicker" id="results-kicker"></p>
+            <h2 id="results-title"></h2>
+            <p id="results-subtitle" class="muted"></p>
+            <dl id="results-stats" class="stats-grid"></dl>
+            <p id="results-coins" class="results-coins"></p>
+            <p id="results-upgrades" class="results-upgrades"></p>
+            <p id="results-achievements" class="results-achievements"></p>
+            <nav class="menu horizontal">
+              <button class="btn primary" type="button" data-action="retry">Retry</button>
+              <button class="btn" type="button" data-action="quit">Return to Title</button>
+            </nav>
+          </div>
+        </section>
+
+        <!-- ============================ Pause ============================ -->
         <section id="screen-pause" class="screen overlay is-hidden">
           <div class="panel">
-            <p class="eyebrow">The petals hold still</p>
+            <p class="kicker">The petals hold still</p>
             <h2>Paused</h2>
             <nav class="menu vertical">
               <button class="btn primary" type="button" data-action="resume">Resume</button>
@@ -121,25 +162,27 @@
           </div>
         </section>
 
-        <!-- ===== Results ===== -->
-        <section id="screen-results" class="screen overlay is-hidden">
-          <div class="panel results-panel">
-            <p id="results-kicker" class="eyebrow">Run complete</p>
-            <h2 id="results-title">Victory</h2>
-            <p id="results-subtitle" class="results-subtitle">The rift falls silent.</p>
-            <dl id="results-stats" class="stats-grid"></dl>
-            <nav class="menu horizontal">
-              <button class="btn primary" type="button" data-action="retry">Retry Run</button>
-              <button class="btn" type="button" data-action="quit">Return to Title</button>
-            </nav>
-          </div>
+        <!-- ============================ Sanctum ============================ -->
+        <section id="screen-sanctum" class="screen list-screen is-hidden">
+          <header class="screen-head">
+            <button class="btn ghost back" type="button" data-action="back-title">← Title</button>
+            <div class="head-copy">
+              <p class="kicker">Between adventures</p>
+              <h2>Starlit Sanctum</h2>
+            </div>
+            <span id="sanctum-coins" class="coin-chip"></span>
+          </header>
+          <p class="sanctum-lead muted">
+            Astral Coins persist between runs. Spend them on permanent blessings before your next adventure.
+          </p>
+          <div id="sanctum-list" class="sanctum-list"></div>
+          <h3 class="sanctum-subhead">Achievements</h3>
+          <div id="achievements" class="achievement-list"></div>
         </section>
 
-        <div id="loading" class="screen loading-screen">
-          <div class="loading-inner">
-            <p class="eyebrow">星の花びら</p>
-            <p class="loading-text">Gathering star petals&hellip;</p>
-          </div>
+        <div id="loading" class="loading">
+          <p class="jp">星の花びら</p>
+          <p class="loading-text">Gathering star petals…</p>
         </div>
       </div>
     </div>
