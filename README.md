@@ -14,9 +14,9 @@ stages.
 
 ## Screenshots
 
-| Title screen | Combat |
-| --- | --- |
-| ![Title screen](docs/screenshots/phase1-title.png) | ![Combat in the Blossom Meadow](docs/screenshots/phase1-battle.png) |
+| Title screen | Combat | Victory |
+| --- | --- | --- |
+| ![Title screen](docs/screenshots/phase1-title.png) | ![Combat in the Blossom Meadow](docs/screenshots/phase1-battle.png) | ![Victory and run results](docs/screenshots/phase1-results.png) |
 
 Both images are captured from the current build running locally.
 

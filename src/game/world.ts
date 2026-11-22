@@ -197,7 +197,8 @@ export class World {
       this.endRun(true);
       return;
     }
-    this.hero.heal(this.hero.maxHp * 0.15);
+    // A no-upgrade Phase 1 run has no other sustain, so each sealed rift mends over half her health.
+    this.hero.heal(this.hero.maxHp * 0.55);
     this.startStage(this.stageIndex + 1);
   }
 
@@ -213,7 +214,11 @@ export class World {
   spawnEnemy(defId: string, x: number, hpScale: number, damageScale: number): Enemy {
     const def = getEnemyDef(defId);
     this.enemySeq += 1;
-    const enemy = new Enemy(`${def.id}-${this.enemySeq}`, def, clampX(x), hpScale, damageScale);
+    // Bosses carry their own tuned stats; stage scaling on top of them made the mini-boss and the
+    // final boss mathematically unwinnable (observed: defeat at stage 5 with the golem at 30%).
+    const scaledHp = def.tier === 'boss' ? 1 : hpScale;
+    const scaledDamage = def.tier === 'boss' ? 1 : damageScale;
+    const enemy = new Enemy(`${def.id}-${this.enemySeq}`, def, clampX(x), scaledHp, scaledDamage);
     this.enemies.push(enemy);
     if (def.tier === 'boss') this.onBossSpawn?.(def.name);
     return enemy;
@@ -292,6 +297,15 @@ export class World {
     this.addText(this.hero.x, GROUND_Y - 210, `-${taken}`, false);
     this.shakeCamera(3);
     sfx.play('hurt');
+  }
+
+  /** Mend the heroine and show it, used when a wave is cleared. */
+  healHero(amount: number): void {
+    const healed = this.hero.heal(amount);
+    if (healed <= 0) return;
+    this.addText(this.hero.x, GROUND_Y - 232, `+${Math.round(healed)}`, false);
+    this.addRing(this.hero.x, GROUND_Y - 60, 110, '#9ff0c8');
+    sfx.play('heal');
   }
 
   /** Damage every enemy in front of the heroine. Returns the number of enemies hit. */

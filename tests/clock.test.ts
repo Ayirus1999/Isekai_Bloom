@@ -32,7 +32,7 @@ describe('SimulationClock', () => {
 
   it('clamps long real steps so a stalled tab cannot skip the run', () => {
     const clock = new SimulationClock();
-    expect(clock.advance(5)).toBeCloseTo(0.05);
+    expect(clock.advance(5)).toBeCloseTo(0.1);
   });
 
   it('ignores invalid deltas', () => {

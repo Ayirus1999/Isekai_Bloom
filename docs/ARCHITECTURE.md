@@ -36,7 +36,9 @@ presentation and must stay smooth while paused.
 
 `SimulationClock` (`src/core/clock.ts`) is the only source of gameplay time.
 
-- `advance(realDelta)` returns `min(realDelta, 0.05) × scale`, or `0` when paused.
+- `advance(realDelta)` returns `min(realDelta, 0.1) × scale`, or `0` when paused. The clamp keeps a
+  long frame (tab switch, GC pause) from teleporting the fight, but 0.1 s is generous enough that a
+  machine running below 20 fps still plays at real speed instead of in slow motion.
 - `scale` is `1 | 2`; `toggleScale()` flips it.
 - `pause()` / `resume()` gate the whole simulation, not just animation.
 - `reset()` returns a fresh clock for a new run.
@@ -134,6 +136,12 @@ Pure functions with the injected `Rng`, so critical outcomes are reproducible in
 `src/game/stageRunner.ts` spawns waves as the simulated clock passes their `at` time, tracks kills,
 and flips to `clear` once every wave has spawned and the arena is empty. `World.advanceStage`
 applies the between-stage heal and either starts the next stage or ends the run in victory.
+
+Waves are **gated**: a due wave waits for the arena to empty (up to 18 s), and clearing one heals
+the heroine for 20% of maximum health. Both exist because the late stages otherwise stack fixed-timer
+groups on top of each other with no recovery inside a fight, which made stage 9 unwinnable. Bosses
+are exempt from `hpScale`/`damageScale` in `World.spawnEnemy`: they are the only enemies whose stats
+are authored as stage peaks, so scaling them again doubled the final fight.
 
 ## Rendering
 
