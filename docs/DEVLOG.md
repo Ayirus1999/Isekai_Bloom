@@ -62,7 +62,7 @@ roguelite rebuild” describe the superseded stage-runner prototype.
 
 - `npm run typecheck` — pass; `npm test` — **54/54 pass**; `npm run build` — pass.
 - Headless balance sweep with auto-first-card picks: five of six heroines cleared Blossom Meadow;
-  Akari fell to the elite encounter. This is a naive-player baseline, not final balance.
+  Akari was defeated at 8/10 encounters. This is a naive-player baseline, not final balance.
 - Browser: complete Blossom Meadow victory, nine upgrades chosen, 2× toggle, results and save
   persistence across reload.
 - Android: debug APK installed on a 1080×2400 **Android 16 / API 36 emulator**. Real `adb` taps

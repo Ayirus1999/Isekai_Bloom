@@ -174,7 +174,7 @@ account or cloud sync exists.
   stats are peaks rather than trash scaling.
 - Headless auto-runs with first-card picks (a deliberately naive player) produce a mix of victories
   and close losses. In the last recorded sweep, five of six heroines cleared Blossom Meadow; Akari
-  fell to the elite encounter. This is the current balance baseline, not a claim of final tuning.
+  was defeated at 8/10 encounters. This is the current balance baseline, not a claim of final tuning.
 - A full run takes roughly 1.5–6 simulated minutes depending on heroine and build; results show the
   simulated duration.
 
