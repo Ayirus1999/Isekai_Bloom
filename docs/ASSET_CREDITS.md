@@ -1,42 +1,63 @@
 # Asset credits
 
-## Character, background and boss art
+## Visuals
 
-All illustrations in `assets/` were generated specifically for this project with an image-generation
-model and then integrated here. They are original works made for *Hoshi no Hanabira: Isekai Bloom*
-and are not derived from any existing anime, manga or game artwork.
+There are **no bitmap character, boss, background or effect assets** in the current build. Every
+visual is drawn at runtime by original code:
 
-| File | Subject | Purpose |
-| --- | --- | --- |
-| `assets/heroes/yuzuki-portrait.jpg` | Yuzuki Hoshino key visual | Title screen, roster card, HUD portrait |
-| `assets/heroes/yuzuki-sprite.jpg` | Yuzuki full-body figure on chroma green | In-combat sprite (keyed at runtime) |
-| `assets/backgrounds/blossom-meadow.jpg` | Blossom Meadow stage backdrop | Combat background, menu backdrop |
-| `assets/bosses/thorn-queen.jpg` | The Thorn Queen | Boss encounter sprite |
+| Asset | Source |
+| --- | --- |
+| Heroine rigs, faces, hair, outfits, weapons | `src/render/hero.ts` |
+| Enemy and boss bodies | `src/render/enemies.ts` |
+| Sky, ground, trees, parallax and motes | `src/render/background.ts` |
+| Slashes, rings, sparks, projectiles, damage numbers | `src/render/effects.ts` |
+| Camera, portrait compression and composition | `src/render/renderer.ts` |
+| Pose clips, anticipation, impact timing | `src/game/anim.ts` |
 
-The in-combat sprite is chroma-keyed in the browser (`src/render/assets.ts`): pixels close to the
-key colour are made transparent and green fringing is removed, so the flat green backdrop never
-reaches the screen.
+The designs are original to this project. No existing anime, manga, game, film or stock artwork is
+traced, copied or redistributed. References named in the design brief informed broad archetypes
+only; no character's face, hairstyle, outfit, accessory or pose is reproduced.
 
-Character designs are original interpretations of broad archetypes (elegant swordswoman, energetic
-duelist, gentle princess, warm guardian, refined aristocrat, ethereal mage). No existing character's
-face, outfit, hairstyle, accessory or pose is reproduced.
+The earlier prototype used generated JPG key art and a chroma-keyed sprite. Those files were removed
+when the current procedural rig replaced them and are not part of the current build.
+
+## Launcher icon and splash
+
+`resources/icon-only.png` is an original starflower emblem created for this project on 2026-11-22
+with an image-generation tool. It contains no third-party character art, logo or text. Capacitor
+Assets generated the Android launcher, adaptive-icon and splash PNGs from it; the generated files live
+under `android/app/src/main/res/` and are build assets, not separate artwork.
 
 ## Audio
 
-There are no audio files in this repository. Every sound effect is synthesised at runtime with the
-Web Audio API (`src/audio/sfx.ts`), which keeps the project free of sampled or licensed audio.
+No audio files are bundled. Every cue is synthesized at runtime with the Web Audio API in
+`src/audio/sfx.ts`. There is no music track.
 
 ## Fonts
 
-The interface uses the player's locally installed fonts through a system serif/sans stack. No font
-files are bundled or downloaded.
+The interface uses locally installed system serif/sans stacks. No fonts are bundled, downloaded or
+redistributed.
 
-## Code and libraries
+## Software
 
-Runtime code is written for this project. Development dependencies: Vite, TypeScript and Vitest,
-each under its own licence (MIT). They are not redistributed in source form.
+Runtime dependencies: none beyond the game's own code.
 
-## Licensing note
+Development dependencies:
 
-No licence has been chosen for this repository yet. Until one is added, the code and art remain
-all-rights-reserved by the author; treat the repository as source-available rather than open source.
+- Vite (MIT)
+- TypeScript (Apache-2.0)
+- Vitest (MIT)
+- Capacitor CLI/core/Android (MIT)
+
+Android shell generation uses the standard Capacitor Android project (MIT). Android Gradle Plugin and
+AndroidX components are used under their respective licenses when building the APK; their binaries
+are not committed.
+
+## Licensing status
+
+No license file has been added. The repository is **source-available, not open source**; the author
+retains all rights. Do not reuse the code or art without permission until a license is chosen.
+
+## Generated screenshot evidence
+
+`docs/screenshots/` contains captures from the running build, not redistributed third-party art.

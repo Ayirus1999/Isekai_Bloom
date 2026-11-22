@@ -1,153 +1,145 @@
 # Game design
 
-**Hoshi no Hanabira: Isekai Bloom** — a 2D side-view anime auto-combat roguelite.
+**Hoshi no Hanabira: Isekai Bloom** — a 2D side-view anime auto-battler roguelite.
 
-Design pillars:
+## Design pillars
 
-1. **Beautiful heroines.** Distinct silhouettes, palettes and combat identities.
-2. **Automatic combat.** The player watches and thinks; the heroine executes.
-3. **Meaningful decisions.** Upgrade choices should change how the next fight plays out.
-4. **Satisfying progression.** Visible growth within a run and (planned) across runs.
+1. **Animated heroines are the centrepiece.** Each should read as a character with her own silhouette,
+   palette, weapon and combat temperament.
+2. **Automatic combat.** The player never moves, aims or presses attack. Watching should be legible
+   and satisfying.
+3. **Build decisions matter.** Three cards after every reward; rarity, stacking and evolutions change
+   real damage, survivability and pacing.
+4. **Short, replayable adventures.** Ten encounters per world, two boss peaks, permanent growth.
 
----
+## World of Asteria
 
-## 1. World of Asteria
+The Starflower Goddess scattered her power as **Star Petals**. Rifts now release corrupted creatures;
+the **Blossom Guardians** travel between regions to seal them. Tone is adventurous, colourful and
+uplifting; combat is magical, never gory.
 
-Asteria was protected by the Starflower Goddess, who scattered her power as **Star Petals**. Rifts
-have begun opening across the land, releasing corrupted creatures. The **Blossom Guardians** travel
-between regions to seal them and restore the world's celestial energy.
-
-Tone: adventurous, colourful, uplifting. Combat is magical and exciting, never gory.
-
-### Regions (planned)
-
-| Region | Theme | World boss |
-| --- | --- | --- |
-| Blossom Meadow | Pastel meadows, cherry blossoms, floating islands | The Thorn Queen |
-| Moonlit Forest | Luminous mushrooms, glowing trees, spirits | The Shadow Empress |
-| Crystal Kingdom | Crystal formations, ancient arcane architecture | The Crystal Dragon |
-| Ember Highlands | Volcanic highlands, fire spirits, lava rivers | The Fallen Star Guardian |
-| Celestial Ruins | Celestial architecture, corrupted guardians | The Corrupted Celestial |
-
-Only the Blossom Meadow is implemented in Phase 1.
-
----
-
-## 2. Run structure
-
-A run is ten stages, escalating in enemy count, enemy tier and stat scaling:
-
-| Stage | Content |
-| --- | --- |
-| 1 | Introduction — star slimes |
-| 2 | Forest sprites and shadow bunnies join |
-| 3 | First elite: Corrupted Fairy Knight |
-| 4 | Larger mixed waves |
-| 5 | Mini-boss: Crystal Golem |
-| 6 | Crystal beetles and flame spirits |
-| 7 | Elite wolves and treants |
-| 8 | Heavy waves |
-| 9 | Pre-boss challenge |
-| 10 | The Thorn Queen |
-
-Each stage defines timed waves in `src/data/stages.ts`. Clearing every wave ends the stage; the
-heroine recovers a small amount of health and the next stage begins. Losing all health ends the run.
-
----
-
-## 3. Heroine: Yuzuki Hoshino
-
-**The Celestial Swordswoman** · 22 · Light / Stars · Celestial Katana
-
-Balanced melee fighter. Composed, elegant, quietly affectionate. Long pearl-silver hair with
-lavender undertones and a narrow side braid, icy turquoise eyes, a white and midnight-blue battle
-coat with silver filigree and a small star ornament.
-
-### Kit
-
-| Ability | Type | Behaviour |
-| --- | --- | --- |
-| Starlight Slash | Melee arc | Fast horizontal strike hitting everything in front |
-| Crescent Step | Dash | Short magical reposition with brief invulnerability |
-| Astral Crescent | Piercing wave | Wide crescent energy slash that travels forward |
-| Starfall | Rain | Calls several stars down onto enemies |
-| Celestial Awakening | Self-buff | Temporarily empowers her katana and attack speed |
-
-Basic attack: precise katana slashes with a 150 px reach and a 0.62 s cadence, with a critical
-chance.
-
-### Automatic ability rules
-
-- **Starlight Slash** when a target is inside its arc.
-- **Astral Crescent** when a target is within its 460 px lane.
-- **Starfall** when at least two enemies are alive.
-- **Celestial Awakening** against a boss, below 62 % health, or when three or more enemies cluster.
-- **Crescent Step** to escape when health drops below 45 % with an enemy inside 130 px.
-
----
-
-## 4. Roster (planned heroines)
-
-All six are adults (21–23). Designs are original; the archetypes below describe tone only.
-
-| Heroine | Age | Role | Element | Weapon |
+| World | Motif | Mini-boss | Final boss | Unlock |
 | --- | --- | --- | --- | --- |
-| Yuzuki Hoshino | 22 | Balanced melee | Light / Stars | Celestial Katana |
-| Akari Amamiya | 21 | Fast melee burst | Fire | Twin Flame Blades |
-| Shiori Tsukishiro | 22 | Defensive melee / magic | Moon / Water | Moonlight Longsword |
-| Miyu Sakuraba | 23 | Sustained damage / healing | Nature | Twin Petal Blades |
-| Rin Kisaragi | 21 | Critical melee / shadow | Shadow | Crimson Rapier |
-| Airi Mizuhara | 22 | Ranged magic | Ice | Frost staff with a floating crystal |
+| Blossom Meadow | Pastel meadow, blossom trees | The Thorn Guardian | The Thorn Queen | Free |
+| Moonlit Forest | Indigo forest, luminous mushrooms | The Moonlit Sentinel | The Crystal Dragon | 250 ✦ |
+| Crystal Kingdom | Pale crystal court | The Crystal Warden | The Crystal Dragon | 500 ✦ |
+| Ember Highlands | Ember sky, volcanic ground | The Ember Beast | The Fallen Star Guardian | 800 ✦ |
+| Celestial Ruins | Violet celestial architecture | The Moonlit Sentinel | The Corrupted Celestial | 1200 ✦ |
 
-Their full ability lists live in `src/data/heroines.ts`; only Yuzuki is unlocked in Phase 1.
+The Crystal Kingdom currently reuses the Crystal Dragon as its final boss; the other four finals are
+unique.
 
----
+## Adventure structure
 
-## 5. Enemies
+Every world is ten encounters:
 
-### Basic
+| # | Kind | Content |
+| --- | --- | --- |
+| 1 | Group | Intro formation (3 enemies) |
+| 2 | Group | Wider formation (4–5) |
+| 3 | Event | Star Petal choice / coins |
+| 4 | Group | Mixed group |
+| 5 | **Mini-boss** | Exactly one mini-boss |
+| 6 | Group | Larger formation |
+| 7 | Group | Elite vanguard |
+| 8 | Event | Blessing / coins |
+| 9 | Group | Final threshold |
+| 10 | **Final boss** | Exactly one boss |
 
-| Enemy | Behaviour |
-| --- | --- |
-| Star Slime | Slow chaser, low health, glowing core |
-| Forest Sprite | Small, quick, erratic chaser |
-| Shadow Bunny | Very fast, fragile, hit-and-run |
-| Mushroomling | Sturdy short-range bruiser |
-| Crystal Beetle | Armoured, slow, high defence feel |
-| Flame Spirit | Keeps distance and lobs fire projectiles |
+Group sizes include formations with up to eight weaker enemies. The encounter's `hpScale` and
+`damageScale` rise by world. Bosses ignore encounter scaling and use their own tuned multipliers.
 
-### Elite
+### Boss rules
 
-Corrupted Fairy Knight (shielded bruiser), Shadow Wolf (fast lunges), Enchanted Treant (slow,
-heavy), Arcane Beast Guardian (ranged bursts), Crystal Golem (mini-boss, ground slams).
+- Mini-bosses and final bosses are **always solo**. The spawn layer slices any boss roster to one.
+- No summons, adds, clones or adds-by-phase. A boss may change patterns at 50% health, never its
+  entourage.
+- Bosses have a dedicated DOM health bar, a canvas telegraph ring, wind-up and strike body motion, a
+  phase label, and a larger procedural body than normal enemies.
+- Boss patterns: `sweep` (close arc or wave), `volley` (three projectiles), `slam` (delayed area),
+  `beam`, `meteor` (two delayed areas), `drain` (damage + self-heal). Phase two shortens wind-ups and
+  cooldowns.
 
-### Boss: The Thorn Queen
+## Roster
 
-- Summons thornlings to pressure the heroine.
-- Marks the ground under the heroine; the telegraphed area erupts after a delay.
-- Charges across the arena.
-- At 50 % health she enters a second phase with faster patterns and a temporary barrier.
+All heroines are adults (21–23), original designs.
 
----
+### Yuzuki Hoshino — The Celestial Swordswoman
+22 · Light / Stars · Celestial katana · Balanced melee.
+Composed, elegant, quietly affectionate. Pearl-silver hair with lavender undertones, icy-turquoise
+eyes, white and midnight-blue battle coat with celestial trim.
 
-## 6. Combat model
+Kit: Starlight Slash (melee arc), Crescent Step (defensive dash), Astral Crescent (piercing wave),
+Starfall (three-star rain), Celestial Awakening (area ultimate + attack/speed buff).
 
-- Side-view ground plane; both sides walk horizontally and attack in place.
-- Damage: `attack × ability power`, reduced by `defence / (defence + 120)`, with a critical roll
-  multiplying by the critical-damage stat.
-- Target selection scores every enemy by proximity, threat tier and whether it is already engaged,
-  then applies hysteresis so the heroine only switches for a meaningfully better target.
-- Everything gameplay-related advances through one simulation delta produced by
-  `SimulationClock`, which also owns pause and the 1× / 2× multiplier.
+### Akari Amamiya — The Blazing Duelist
+21 · Fire · Twin flame blades · Fast melee burst.
+Energetic and protective. Coral-pink layered bob with high ponytail, emerald eyes, white/charcoal
+jacket with ember-gold details.
 
----
+Kit: Flame Rush (multi-hit arc), Burning Cross (two waves), Ember Trail (dash), Phoenix Burst (area),
+Crimson Phoenix (ultimate area + empowerment).
 
-## 7. Upgrades (planned, Phase 2)
+### Shiori Tsukishiro — The Moonlit Princess
+22 · Moon / Water · Moonlight longsword · Defensive hybrid.
+Gentle, thoughtful, quietly determined. Ink-black braid, violet eyes, ivory and moon-blue dress armour.
 
-After eligible stages the simulation pauses and three cards are offered. Categories: offensive,
-defensive, magical, special and heroine-specific. Rarities Common → Legendary raise impact.
+Kit: Lunar Edge (arc), Moonveil (barrier), Falling Moon (wave), Silver Tide (area), Moonlit Sanctuary
+(healing ultimate that also sears enemies).
 
-Evolutions trigger when both halves of a pair are owned:
+### Miyu Sakuraba — The Blossom Guardian
+23 · Nature / Blossoms · Twin petal blades · Sustained damage / healing.
+Warm, patient, emotionally generous. Honey-peach waves, amber eyes, ivory/blossom dress with
+rose-gold ornaments.
+
+Kit: Petal Dance (twin arc), Blossom Shot (petal projectiles), Healing Bloom (heal over time), Thorn
+Waltz (area), Eternal Spring (ultimate storm + healing).
+
+### Rin Kisaragi — The Crimson Aristocrat
+21 · Shadow / Crimson · Crimson rapier · Critical melee.
+Refined, teasing, three moves ahead. Dark-chestnut high ponytail, ruby-violet eyes, burgundy and
+ivory coat-dress.
+
+Kit: Crimson Pierce (precision arc), Shadow Waltz (multi-target dash), Scarlet Phantom (afterimage
+projectile), Royal Decree (crit buff), Crimson Eclipse (ultimate area + crit damage).
+
+### Airi Mizuhara — The Frost Enchantress
+22 · Ice · Frost staff · Ranged magic.
+Calm, curious, quietly humorous. Aqua-to-ocean-blue hair in side braids, sapphire eyes, pale-blue
+dress with crystal ornaments.
+
+Kit: Ice Shard (volley), Frost Ring (area slow), Crystal Lance (piercing wave), Frozen Prison
+(delayed freeze rain), Absolute Zero (crystalline ultimate + shield).
+
+Each kit has different ranges, attack cadence, crit profiles and survivability. The shared rig means
+visual distinction is carried mainly by hair, palette, outfit accents, weapon geometry and clip
+selection.
+
+## Combat model
+
+- Heroine at a fixed left anchor, enemies in a right-hand lane.
+- Basic attacks auto-target with a loyalty bonus; abilities fire on ready + trigger.
+- A committed attack keeps its timing even when hit; flinches play between actions. This keeps boss
+  fights from erasing the heroine's damage output.
+- Damage: `attack × power × crit multiplier`, then `120 / (120 + defence)` mitigation, minimum 1.
+- Status: freeze, slow, shields, attack/speed buffs, heal-over-time.
+- Attack ranges are measured in logical units; the renderer compresses the far lane on portrait
+  phones without changing simulation distances.
+
+## Upgrades
+
+After each reward the simulation pauses and offers exactly three cards. Player picks one.
+
+Categories: Offense, Defense, Magic, Special, plus heroine-specific cards. Rarities: Common,
+Uncommon, Rare, Epic, Legendary. Effects include attack %, attack speed, crit, crit damage, max HP,
+defence, regen, lifesteal, shields, area size, extra projectiles, boss/elite damage, execute thresholds,
+coin gain and heal-on-kill.
+
+Rarity weighting rises with encounter depth. Cards respect stack caps. Character cards appear only for
+the active heroine. When both halves of an evolution pair are owned, one evolution is guaranteed in
+the next offer.
+
+Evolutions:
 
 | Pair | Evolution |
 | --- | --- |
@@ -158,21 +150,49 @@ Evolutions trigger when both halves of a pair are owned:
 | Crimson Precision + Phantom Blade | Crimson Phantom |
 | Frostbite + Frozen Lance | Absolute Zero |
 
----
+Evolved cards are flagged in the offer and unlock an achievement.
 
-## 8. Progression (planned, Phase 5)
+## Permanent progression
 
-**Astral Coins** are earned from stages, bosses, runs and achievements, then spent on permanent
-bonuses (starting health, damage, attack speed, extra upgrade options) and unlocks (heroines,
-worlds). Meta upgrades are intentionally modest so runs stay skill- and decision-driven.
+Astral Coins are earned from encounters, events and bosses, and from achievements. They buy:
 
----
+- **Star Vitality** — +6% max HP per level (8 levels).
+- **Celestial Might** — +4% attack (8).
+- **Petal Haste** — +3% attack speed (6).
+- **Starlit Insight** — +2% crit chance (5).
+- **Prosperity** — +10% coins (5).
 
-## 9. Presentation
+Heroine unlocks: Akari 300, Shiori 450, Miyu 600, Rin 750, Airi 900. World unlocks as listed above.
 
-- Pastel palette, gold filigree interface, serif display type.
-- Large character art on the title and roster screens; in-combat sprites keyed from flat-background
-  illustrations.
-- Element-specific effect colours: starlight blue-white, ember orange, moonlight silver-violet,
-  blossom pink-green, crimson shadow, ice cyan.
-- Damage numbers, critical flourishes, hit flashes and stage banners keep combat readable.
+Lifetime stats and achievements persist. The save format is one versioned localStorage object; no
+account or cloud sync exists.
+
+## Difficulty and pacing
+
+- Between encounters the heroine heals 20% of max HP; events also open an upgrade.
+- Boss HP is multiplied by 0.42 and damage by 0.88 relative to the authored boss line, because boss
+  stats are peaks rather than trash scaling.
+- Headless auto-runs with first-card picks (a deliberately naive player) produce a mix of victories
+  and close losses. In the last recorded sweep, five of six heroines cleared Blossom Meadow; Akari
+  fell to the elite encounter. This is the current balance baseline, not a claim of final tuning.
+- A full run takes roughly 1.5–6 simulated minutes depending on heroine and build; results show the
+  simulated duration.
+
+## Interface and input
+
+- Portrait-first layout; landscape/desktop centers the arena in a shell.
+- Touch: all interactive controls are native buttons with minimum 44 px targets; menus scroll when
+  needed. Combat controls are only pause and speed.
+- Mouse: all screens work by click; keyboard `Esc`/`P` pause, `T` speed.
+- Battle HUD: heroine portrait/name/HP, coins, encounter number/title/progress, build chips, speed,
+  pause and boss bar when present.
+- Upgrade screen: three cards with rarity, category glyph, name, numeric effect and description.
+- Results: encounters cleared, enemies, guardians, damage dealt/taken, time, coins, build,
+  achievements, retry and return.
+
+## Out of scope for this build
+
+- Manual combat controls or movement.
+- Additional adds during boss fights.
+- Cloud saves, accounts, leaderboards, multiplayer.
+- Store publication or platform approval claims.

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Hoshi no Hanabira</string>
+    <string name="title_activity_main">Hoshi no Hanabira</string>
+    <string name="package_name">com.ayirus.hoshinohanabira</string>
+    <string name="custom_url_scheme">com.ayirus.hoshinohanabira</string>
+</resources>

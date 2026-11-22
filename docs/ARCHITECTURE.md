@@ -1,185 +1,208 @@
 # Architecture
 
-The project is a Vite + TypeScript application. The world renders to a single `<canvas>`; the
-interface is plain DOM. There are no runtime dependencies.
+Vite + TypeScript application. The arena renders to one `<canvas>`; the interface is DOM/CSS. There
+are no runtime dependencies. The simulation is DOM-free and runs headlessly in Vitest and
+`scripts/simulate.ts`.
 
 ## Layers
 
 | Layer | Location | Responsibility |
 | --- | --- | --- |
-| Boot | `src/main.ts` | Load art, construct world/renderer/UI, own the frame loop and keyboard shortcuts |
+| Boot | `src/main.ts` | Load save, construct world/renderer/UI, wire callbacks, own the frame loop and keyboard |
 | Core | `src/core/` | `SimulationClock`, seeded `Rng` |
-| Data | `src/data/` | Heroines, enemies, stage script — no behaviour, only definitions |
-| Simulation | `src/game/` | World state, heroine AI, enemy AI, combat maths, targeting, stages |
-| Rendering | `src/render/` | Canvas drawing, sprite keying, effects |
+| Data | `src/data/` | Heroines, enemies, worlds, upgrades — definitions only |
+| Simulation | `src/game/` | World, heroine, enemy AI, animation clips, combat, upgrades, save |
+| Rendering | `src/render/` | Heroine rig, enemies/bosses, backdrop, effects, camera |
 | Interface | `src/ui/` | Screens, HUD, menus, results |
-| Audio | `src/audio/` | Runtime-synthesised sound effects |
+| Audio | `src/audio/` | Runtime-synthesized sound cues |
 
-The dependency direction is one-way: `render` and `ui` read `game`; `game` never imports them.
+Dependencies point one way: `render` and `ui` read `game`; `game` never imports them. `game/save.ts`
+is the only module that touches `localStorage`, and it no-ops when storage is absent.
 
 ## Frame loop
 
 ```text
 requestAnimationFrame
-  ├─ world.update(realDelta)          // presentation smoothing + simulation
-  │    ├─ clock.advance(realDelta)    // 0 when paused, ×2 at 2x, clamped
-  │    └─ step(delta)                 // only when the run is live
+  ├─ world.update(realDelta)
+  │    ├─ clock.advance(realDelta)     // 0 paused, ×2 at 2×, clamped at 0.1 s
+  │    ├─ combat step (if live)
+  │    └─ clear/victory/defeat timers
   ├─ renderer.draw(world, realTime, realDelta)
   └─ ui.updateHud(world.getHud())
 ```
 
-`world.update` receives real time; everything that affects gameplay consumes the **simulated**
-delta. Camera follow, ambient petals and screen-shake decay use real time, because they are
-presentation and must stay smooth while paused.
+`World.time` advances by simulated delta. Rendering-only wobble, petals and shake use real time so the
+screen stays alive while the simulation is paused.
 
 ## Simulation clock
 
-`SimulationClock` (`src/core/clock.ts`) is the only source of gameplay time.
+`SimulationClock` owns gameplay time and the speed multiplier.
 
-- `advance(realDelta)` returns `min(realDelta, 0.1) × scale`, or `0` when paused. The clamp keeps a
-  long frame (tab switch, GC pause) from teleporting the fight, but 0.1 s is generous enough that a
-  machine running below 20 fps still plays at real speed instead of in slow motion.
-- `scale` is `1 | 2`; `toggleScale()` flips it.
-- `pause()` / `resume()` gate the whole simulation, not just animation.
-- `reset()` returns a fresh clock for a new run.
+- `advance(realDelta)` returns `min(realDelta, 0.1) × scale`, or `0` while paused.
+- `scale` is `1 | 2`; `toggleScale()` flips it; `setScale()` restores a saved preference.
+- `pause()`/`resume()` gate the entire simulation.
+- No ability or system multiplies its own timers; everything consumes the same delta.
 
-Because every system is fed this single delta, 2× cannot desynchronise movement, cooldowns,
-projectiles, damage-over-time, spawn timers and stage progression. There are no per-ability
-multipliers anywhere in the codebase.
+## World and encounter flow
 
-## World
-
-`World` (`src/game/world.ts`) owns:
-
-- the clock, heroine, enemies, projectiles, telegraphed impacts and visual effects;
-- run status (`idle → combat → victory | defeat`) and run statistics;
-- camera position and shake;
-- callbacks the interface subscribes to: `onStageStart`, `onStageCleared`, `onBossSpawn`,
-  `onBossPhase`, `onRunEnd`.
-
-One simulation step runs in a fixed order so systems never see half-updated state:
-
-1. heroine timers (attack/ability cooldowns, buffs, invulnerability),
-2. heroine AI,
-3. enemy AI,
-4. projectiles,
-5. impacts,
-6. dead-enemy cleanup (grants stage progress and sound),
-7. stage runner (wave spawning, clear detection),
-8. effect ageing,
-9. defeat check.
-
-## Heroine AI
-
-`src/game/heroAi.ts` is a small state machine: `searching → moving → attacking`, with `casting` and
-`repositioning` entered by abilities and `defeated` terminal.
-
-Each step it:
-
-1. builds target candidates and asks `selectTarget`;
-2. tries abilities in data order, each gated by cooldown **and** trigger;
-3. closes to `range × 0.78` (stopping inside range prevents jitter);
-4. attacks when the basic-attack cooldown allows.
-
-`hero.targetId` persists between steps and feeds the targeting loyalty bonus.
-
-### Targeting
-
-`src/game/targeting.ts` scores candidates by distance, tier (elite 90, boss 180), injured-health
-finish bonus and a 130-point loyalty bonus for the current target. A new enemy must be decisively
-closer or a higher tier to steal focus, which removes the classic "oscillate between two targets"
-failure. The function is pure, so the behaviour is unit-tested.
-
-### Abilities
-
-`heroActions.ts` maps each ability `kind` to an execution:
-
-| Kind | Behaviour |
-| --- | --- |
-| `meleeArc` | Damage everything in front within reach |
-| `wave` | Spawn a piercing crescent projectile |
-| `rain` | Queue delayed impacts on the nearest enemies |
-| `dash` | Retreat, grant brief invulnerability, ring effect |
-| `buff` | Apply attack/attack-speed bonus for a duration |
-| `projectile` | Fire one or more projectiles |
-| `aoe` | Damage everything inside a radius |
-
-Triggers: `inRange`, `crowd` (minimum live enemies), `bossOrHurt` (boss present, health below a
-threshold, or enough enemies), `hurtAndClose`, `always`. This keeps kits automatic but situational.
-
-## Enemies
-
-`src/game/enemy.ts` holds per-unit state (health, cooldown, freeze, boss timers, phase, shield).
-`src/game/enemyAi.ts` implements:
-
-- **chasers** — close to `attackRange`, then attack on cooldown;
-- **ranged** — hold a 230–`attackRange` lane and fire projectiles;
-- **bosses** — summoned adds, telegraphed ground volleys, telegraphed charges, and a phase-two
-  barrier at 50 % health; the Crystal Golem swaps summons for heavier slams.
-
-Enemies are clamped to the arena so knockback, charges and kiting cannot walk them off-screen.
-
-## Combat maths
-
-`src/game/combat.ts`:
+`World` owns the clock, hero, enemies, projectiles, impacts, effects, run status and stats. Run status:
 
 ```text
-raw     = attack × ability power × (critical ? critDamage : 1)
-applied = max(1, round(raw × 120 / (120 + defence)))
+idle → combat → clearing → reward → combat … → victory | defeat
 ```
 
-Pure functions with the injected `Rng`, so critical outcomes are reproducible in tests.
+Each adventure is a `WorldDef.encounters` array of ten `EncounterDef`s:
+`group`, `event`, `miniboss`, `final`. Events immediately award coins and open the upgrade screen.
+Boss tiers are scaled once in `spawnEnemy` (`hp ×0.42`, `damage ×0.88`) and never receive encounter
+scaling on top.
 
-## Stages
+**Solo boss guarantee:** `spawnEncounter` flattens the encounter's groups, then slices to the first id
+when the kind is `miniboss` or `final`. There is no code path that adds minions to a boss encounter;
+`World.summonAdds()` is intentionally a no-op. A test asserts exactly one enemy in both boss types.
 
-`src/data/stages.ts` declares ten stages, each with `hpScale`, `damageScale` and timed waves.
-`src/game/stageRunner.ts` spawns waves as the simulated clock passes their `at` time, tracks kills,
-and flips to `clear` once every wave has spawned and the arena is empty. `World.advanceStage`
-applies the between-stage heal and either starts the next stage or ends the run in victory.
+Simulation order in `step`:
 
-Waves are **gated**: a due wave waits for the arena to empty (up to 18 s), and clearing one heals
-the heroine for 20% of maximum health. Both exist because the late stages otherwise stack fixed-timer
-groups on top of each other with no recovery inside a fight, which made stage 9 unwinnable. Bosses
-are exempt from `hpScale`/`damageScale` in `World.spawnEnemy`: they are the only enemies whose stats
-are authored as stage peaks, so scaling them again doubled the final fight.
+1. heroine timers (cooldowns, buffs, invulnerability, hurt flash);
+2. health regeneration from upgrades;
+3. advance the heroine's animation clip and resolve crossed events;
+4. heroine AI;
+5. enemy AI;
+6. projectiles;
+7. impacts (telegraphed area attacks);
+8. effects ageing;
+9. death check;
+10. encounter clear detection when every enemy is dead.
+
+## Heroine
+
+`Hero` is anchored at `HERO_X = 318` in a 1280×720 reference arena. She never moves in simulation.
+`facing` flips; lunges are pose animation only.
+
+- Stats are derived from the heroine definition plus run mods and permanent bonuses.
+- `startBasic`/`startAbility` lock an action containing clip id, target and power.
+- `advanceAnimation(dt)` returns clip events crossed in that step. `World` resolves them centrally.
+- Hit reactions never cancel a committed basic/ability; they play only between actions. This prevents
+  boss pressure from silently erasing her damage. Ultimates are also protected by `ultimateLock`.
+- Shield absorption is tracked separately; the results "damage taken" counter includes damage that a
+  barrier absorbed.
+
+### Heroine AI
+
+`updateHeroAi` selects a target, faces it, tries ready abilities in data order, then uses a basic
+attack when within `basic.range + 92 lunge + target.radius`. Abilities are data-driven by `trigger`
+(`inRange`, `crowd`, `bossOrHurt`, `hurt`, `always`), `range`, `minEnemies` and `hpBelow`.
+
+`selectTarget` scores proximity, tier and a loyalty bonus so the heroine does not oscillate between
+targets. It is pure and unit-tested.
+
+## Animation clips
+
+`src/game/anim.ts` defines a shared `Pose` (bob, lean, crouch, head tilt, six limb angles, hair/skirt
+sway, weapon rotation, scale, glow, alpha), interpolation and per-heroine clip sets.
+
+- Clips are keyframed poses plus timed `ClipEvent`s.
+- Event types: `impact`, `projectile`, `rain`, `aoe`, `buff`, `heal`, `shield`, `dash`, `sfx`,
+  `ultimate`, `footstep`.
+- `heroActions.ts` resolves each event into the same combat functions used by AI (strike, area,
+  projectile, heal, shield, buff).
+- Because the clip advances on simulated delta, 2× changes animation and damage together.
+
+## Enemies and bosses
+
+`Enemy` is one independent instance with hp, damage, timers, freeze/slow, shield, boss phase and
+pattern index. `updateEnemies` implements:
+
+- melee chasers (approach to range, wind-up, hit);
+- ranged holders (keep distance, fire projectiles);
+- bosses (approach, telegraph, then execute a pattern: sweep, volley, slam, beam, meteor, drain;
+  phase two at 50% health shortens wind-ups and cooldowns).
+
+All enemies stay clamped in the arena. Bosses have a DOM boss bar and a canvas telegraph ring plus a
+wind-up/strike body shift. Deaths fade and sink before the clear timer.
+
+## Upgrades
+
+`src/data/upgrades.ts` defines 48 cards. `rollUpgradeChoices`:
+
+- excludes maxed stacks and other heroines' cards;
+- excludes locked evolutions unless both prerequisites are owned;
+- weights supply by rarity and encounter depth;
+- guarantees one slot to a ready evolution;
+- adds one character-flavoured slot with a probability.
+
+`applyUpgrade` mutates `RunMods`; `World.chooseUpgrade` applies it, raises max HP correctly, heals 20%
+and starts the next encounter. Combat is paused by the clock while the screen is open.
+
+## Save
+
+`src/game/save.ts` stores one versioned JSON object under `hoshi-no-hanabira.save`:
+
+- coins, unlocked heroines/worlds, permanent upgrade levels, achievements, lifetime stats, settings;
+- loading merges defaults, sanitizes unlocks against current data and survives malformed JSON;
+- writes are wrapped in `try/catch` so private mode or a full quota cannot break a run.
 
 ## Rendering
 
-`Renderer` fixes a 1280×720 logical space and scales the backing store by device pixel ratio.
+`Renderer` owns the canvas backing store and device-pixel-ratio resize. World-space drawing uses the
+1280×720 logical arena.
 
-- **Background** (`render/background.ts`): painted meadow with parallax, haze, ground gradient and
-  deterministic flowers in world space.
-- **Heroine** (`render/hero.ts`): runtime chroma-keyed illustration, mirrored by facing, with walk
-  bob, attack lean, hurt flash, invulnerability ring and an aura while empowered.
-- **Enemies** (`render/enemies.ts`): procedural silhouettes per archetype plus a painted sprite for
-  the Thorn Queen, with health bars and elite auras.
-- **Effects** (`render/effects.ts`): impacts/telegraphs, projectiles, slashes, rings, sparks and
-  floating damage numbers.
+### Landscape
+
+Uniform fit: `scale = min(w / 1280, h / 720)`, centered. The heroine is at logical x 318.
+
+### Portrait
+
+Portrait uses a dedicated camera (`Renderer.layout`) instead of shrinking the desktop frame:
+
+- sprites use `scale = min(0.8, width / 640)`, so the heroine is roughly 150–230 px tall instead of
+  ~100 px;
+- the ground sits at 68% of the viewport height;
+- the near 300 logical px in front of the heroine keep true scale, then the far enemy lane is
+  compressed into the remaining width. This preserves readable melee spacing while keeping 3–8
+  enemies, casters and a solo boss on screen;
+- all x positions (combatants, projectiles, impacts, effects) use the same mapping; y and radii use
+  the same uniform scale, so effects remain aligned;
+- damage-number text gets a 1.5× font boost for phone readability.
+
+The HUD is DOM above the canvas, with safe-area insets. On narrow portrait phones the encounter chip
+wraps to its own full-width row rather than disappearing.
+
+### Character rig
+
+`render/hero.ts` draws the heroine from the sampled pose: layered back hair, legs/boots, torso,
+skirt/coat, back arm, front sleeve/glove, face, front hair, weapon and effects. The face uses a
+three-quarter eye pair (leading eye larger), blinking, mood-dependent brows/mouth, blush and tilt.
+The same function paints the title, roster cards, HUD portrait and battle sprite, which guarantees a
+consistent design.
+
+Boss bodies are procedural per shape in `render/enemies.ts` (thorn queen, crystal dragon, fallen
+guardian, shadow empress, corrupted celestial, plus mini-boss shapes). Normal enemies have smaller
+archetype painters, health bars, hit flash, freeze tint, telegraph ring, attack lunge and death fade.
 
 ## Interface
 
-`src/ui/screens.ts` owns every DOM screen (title, roster, HUD, pause, results) and exposes callbacks
-to `main.ts`. The HUD is updated from a single `HudSnapshot` per frame. Interface animations and
-timers use real time, so menus stay responsive at 2× and while the simulation is paused.
+`Ui` owns DOM lookup, screen switching and rendering of data-driven lists. `World` emits callbacks
+for encounter start, boss spawn/phase, reward and run end. `Ui.updateHud` receives one snapshot per
+frame and only writes changed values. Menus use native buttons, so keyboard focus and screen-reader
+roles work without custom input code.
 
 ## Audio
 
-`src/audio/sfx.ts` synthesises every cue with oscillators, filtered noise and gain envelopes; the
-first pointer interaction unlocks the audio context. `setMuted` is wired to the pause menu, and the
-module is a no-op without a `window` so the simulation can be imported in tests.
+`src/audio/sfx.ts` synthesizes every cue with oscillators/noise and gain envelopes. The first pointer
+interaction unlocks the AudioContext. Muting persists in the save.
 
-## Testing
+## Testing and tooling
 
-Vitest runs four suites headlessly: clock behaviour, heroine state, damage maths, targeting and
-end-to-end simulation (speed multiplier, pause freeze, defeat/victory). The world is DOM-free, so
-these run in Node without a browser.
+- `tests/` — 54 Vitest tests: clock speed/pause, combat math, targeting, hero lifecycle and
+  animation events, upgrades, encounter composition (group, solo bosses, event counting), victory.
+- `scripts/simulate.ts` — plays complete runs with automatic first-card picks, logs encounter health
+  and results, supports `--all`, `--boss` and `--upgrades=N` experiments.
+- `npm run build` — strict `tsc --noEmit` then Vite production bundle.
 
-## Notable decisions
+## Deliberate limitations
 
-- **Canvas over an engine.** The simulation is a handful of systems and a side-view arena; a
-  full engine would add weight without solving anything the project needs yet.
-- **Data-driven content.** Heroines, enemies and stages are plain objects. Adding a heroine is data
-  plus art, not new control flow.
-- **Chroma keying instead of cut-outs.** Character illustrations stay ordinary image files; the
-  browser removes the flat backdrop at load time, which keeps the asset pipeline simple.
-- **One clock.** Speed and pause are properties of the simulation, not of individual systems.
+- The rig is shared across heroines; distinctiveness comes from data (palette, hair/outfit/weapon
+  variants) and pose clips, not separate skeletons.
+- Simulation positions are platform-independent; portrait compression is renderer-only, so gameplay
+  rules do not change between desktop and phone.
+- There is no engine, ECS or physics system; the scope does not need one.

@@ -2,17 +2,24 @@ import { sfx } from '../audio/sfx';
 import { SimulationClock } from '../core/clock';
 import { Rng } from '../core/rng';
 import { getEnemyDef } from '../data/enemies';
-import { STAGES, type StageDef } from '../data/stages';
-import { ARENA_MAX_X, ARENA_WIDTH, CAMERA_LERP, GROUND_Y, VIEW_W } from './constants';
+import { BOSS_X, ENCOUNTER_CLEAR_DELAY, ENEMY_LANE_MAX, ENEMY_LANE_MIN, GROUND_Y, VICTORY_HOLD, VIEW_W } from './constants';
 import { rollDamage, rollIncoming } from './combat';
 import { Enemy } from './enemy';
 import { updateEnemies } from './enemyAi';
-import { Hero, clampX } from './hero';
+import { Hero, type PermanentBonus } from './hero';
+import { resolveHeroEvent } from './heroActions';
 import { updateHeroAi } from './heroAi';
-import { StageRunner } from './stageRunner';
-import type { HeroineDef } from './types';
+import { applyUpgrade } from './upgrades';
+import {
+  EMPTY_MODS,
+  type EncounterDef,
+  type HeroineDef,
+  type RunMods,
+  type UpgradeDef,
+  type WorldDef,
+} from './types';
 
-export type RunStatus = 'idle' | 'combat' | 'victory' | 'defeat';
+export type RunStatus = 'idle' | 'combat' | 'clearing' | 'reward' | 'victory' | 'defeat';
 
 export interface Projectile {
   x: number;
@@ -20,9 +27,7 @@ export interface Projectile {
   vx: number;
   vy: number;
   radius: number;
-  /** Attack multiplier for heroine projectiles. */
   power: number;
-  /** Flat damage for enemy projectiles. */
   damage: number;
   from: 'hero' | 'enemy';
   color: string;
@@ -33,7 +38,6 @@ export interface Projectile {
   hit: Set<string>;
 }
 
-/** A delayed area strike, telegraphed before it lands. */
 export interface Impact {
   x: number;
   radius: number;
@@ -55,6 +59,7 @@ export interface BossHud {
   name: string;
   hpRatio: number;
   phase: number;
+  tier: 'boss';
 }
 
 export interface HudSnapshot {
@@ -62,40 +67,58 @@ export interface HudSnapshot {
   hp: number;
   maxHp: number;
   hpRatio: number;
-  stageNumber: number;
-  stageCount: number;
-  stageName: string;
+  shield: number;
+  encounterNumber: number;
+  encounterCount: number;
+  encounterTitle: string;
+  encounterKind: EncounterDef['kind'] | 'none';
   progress: number;
   progressLabel: string;
-  empowered: boolean;
+  coins: number;
+  upgrades: string[];
   boss: BossHud | null;
+  empowered: boolean;
 }
 
 export interface RunResults {
   victory: boolean;
-  stagesCleared: number;
+  encountersCleared: number;
   enemiesDefeated: number;
   bossesDefeated: number;
   damageDealt: number;
+  damageTaken: number;
   duration: number;
+  coins: number;
+  upgrades: string[];
+  heroine: string;
+  world: string;
 }
 
 export interface RunStats {
-  stagesCleared: number;
+  encountersCleared: number;
   enemiesDefeated: number;
   bossesDefeated: number;
   damageDealt: number;
+  damageTaken: number;
+  coins: number;
+  bestEncounter: number;
+  upgrades: string[];
 }
 
 /**
- * Owns the simulation. Every system advances from the delta produced by `SimulationClock`, so
- * pause and the 1x / 2x multiplier apply to movement, cooldowns, projectiles, damage-over-time and
- * stage timers uniformly.
+ * Owns one adventure: the encounter sequence, combatants, projectiles, effects and the simulation
+ * clock. Group encounters may hold many independent enemies; mini-boss and final encounters are
+ * hard-enforced to a single entity.
  */
 export class World {
   readonly clock = new SimulationClock();
   readonly rng = new Rng(0x5eed1a7e);
-  hero: Hero;
+
+  hero!: Hero;
+  worldDef!: WorldDef;
+  encounters: EncounterDef[] = [];
+  encounterIndex = 0;
+  encounter: EncounterDef | null = null;
 
   enemies: Enemy[] = [];
   projectiles: Projectile[] = [];
@@ -103,147 +126,270 @@ export class World {
   effects: VisualEffect[] = [];
 
   status: RunStatus = 'idle';
-  stageIndex = 0;
-  stageRunner: StageRunner | null = null;
-  runStats: RunStats = { stagesCleared: 0, enemiesDefeated: 0, bossesDefeated: 0, damageDealt: 0 };
+  mods: RunMods = { ...EMPTY_MODS };
+  owned: Record<string, number> = {};
 
-  cameraX = 0;
-  shake = 0;
-  /** Simulated seconds in the current run. */
+  runStats: RunStats = this.emptyStats();
   time = 0;
-
-  onStageStart?: (stage: StageDef, index: number) => void;
-  onStageCleared?: (stage: StageDef) => void;
-  onBossSpawn?: (name: string) => void;
-  onBossPhase?: (name: string) => void;
-  onRunEnd?: (victory: boolean) => void;
+  shake = 0;
+  cinematic = 0;
 
   private enemySeq = 0;
+  private clearTimer = 0;
+  private endTimer = 0;
+  private ended = false;
+  private spawned = false;
 
-  constructor(def: HeroineDef) {
-    this.hero = new Hero(def, ARENA_WIDTH * 0.5);
-    this.cameraX = clampCamera(this.hero.x);
+  onEncounterStart?: (encounter: EncounterDef, index: number) => void;
+  onBossSpawn?: (name: string) => void;
+  onBossPhase?: (name: string) => void;
+  onReward?: (encounter: EncounterDef, index: number) => void;
+  onRunEnd?: (victory: boolean) => void;
+
+  private emptyStats(): RunStats {
+    return {
+      encountersCleared: 0,
+      enemiesDefeated: 0,
+      bossesDefeated: 0,
+      damageDealt: 0,
+      damageTaken: 0,
+      coins: 0,
+      bestEncounter: 0,
+      upgrades: [],
+    };
+  }
+
+  // ------------------------------------------------------------------ run flow
+
+  startRun(heroine: HeroineDef, worldDef: WorldDef, bonus: PermanentBonus, startIndex = 0): void {
+    this.worldDef = worldDef;
+    this.encounters = worldDef.encounters;
+    this.mods = { ...EMPTY_MODS };
+    this.mods.coinPct = bonus.coinPct;
+    this.owned = {};
+    this.hero = new Hero(heroine, this.mods, bonus);
+    this.enemies = [];
+    this.projectiles = [];
+    this.impacts = [];
+    this.effects = [];
+    this.runStats = this.emptyStats();
+    this.encounterIndex = 0;
+    this.time = 0;
+    this.shake = 0;
+    this.cinematic = 0;
+    this.enemySeq = 0;
+    this.ended = false;
+    this.clock.reset();
+    this.beginEncounter(startIndex);
   }
 
   get groundY(): number {
     return GROUND_Y;
   }
 
-  get stageName(): string {
-    return this.stageRunner?.stage.name ?? 'Blossom Meadow';
-  }
-
   get hasBoss(): boolean {
-    return this.enemies.some((enemy) => enemy.def.tier === 'boss' && enemy.alive);
+    return this.enemies.some((enemy) => enemy.isBoss && enemy.alive);
   }
 
-  startRun(def: HeroineDef): void {
-    this.hero = new Hero(def, ARENA_WIDTH * 0.5);
+  get encounterCount(): number {
+    return this.encounters.length;
+  }
+
+  private beginEncounter(index: number): void {
+    if (index >= this.encounters.length) {
+      this.endRun(true);
+      return;
+    }
+    this.encounterIndex = index;
+    this.encounter = this.encounters[index]!;
+    this.runStats.bestEncounter = Math.max(this.runStats.bestEncounter, index + 1);
     this.enemies = [];
     this.projectiles = [];
     this.impacts = [];
-    this.effects = [];
-    this.runStats = { stagesCleared: 0, enemiesDefeated: 0, bossesDefeated: 0, damageDealt: 0 };
-    this.stageIndex = 0;
-    this.time = 0;
-    this.shake = 0;
-    this.enemySeq = 0;
+    this.spawned = false;
+
+    if (this.encounter.kind === 'event') {
+      this.runStats.encountersCleared += 1;
+      this.awardCoins(this.encounter.reward);
+      this.status = 'reward';
+      this.clock.pause();
+      sfx.play('clear');
+      this.onEncounterStart?.(this.encounter, index);
+      this.onReward?.(this.encounter, index);
+      return;
+    }
+
     this.status = 'combat';
-    this.cameraX = clampCamera(this.hero.x);
-    this.clock.reset();
-    this.startStage(0);
+    this.spawnEncounter(this.encounter);
+    this.onEncounterStart?.(this.encounter, index);
+    sfx.play(this.encounter.kind === 'group' ? 'click' : 'boss');
   }
+
+  private spawnEncounter(encounter: EncounterDef): void {
+    const solo = encounter.kind === 'miniboss' || encounter.kind === 'final';
+    const ids: string[] = [];
+    for (const group of encounter.groups) {
+      for (let i = 0; i < group.count; i += 1) ids.push(group.id);
+    }
+    if (ids.length === 0) return;
+
+    // A boss encounter may only ever contain its single boss, whatever the data says.
+    const roster = solo ? ids.slice(0, 1) : ids;
+
+    roster.forEach((id, index) => {
+      const def = getEnemyDef(id);
+      let x: number;
+      if (solo) {
+        x = BOSS_X;
+      } else {
+        const t = roster.length <= 1 ? 0.5 : index / (roster.length - 1);
+        x = ENEMY_LANE_MIN + t * (ENEMY_LANE_MAX - ENEMY_LANE_MIN);
+        // Small deterministic stagger keeps the formation from looking like a row of clones.
+        x += ((index % 3) - 1) * 26;
+      }
+      const standOff = solo ? 0 : (index % 3) * 44;
+      this.spawnEnemy(id, x, encounter.hpScale, encounter.damageScale, standOff);
+      if (solo) this.onBossSpawn?.(def.name);
+    });
+    this.spawned = true;
+  }
+
+  private awardCoins(base: number): void {
+    const amount = Math.round(base * (1 + this.mods.coinPct));
+    this.runStats.coins += amount;
+  }
+
+  /** Main calls this after the player picks a card. Applies the upgrade, then advances. */
+  chooseUpgrade(def: UpgradeDef): void {
+    if (this.status !== 'reward') return;
+    const beforeMax = this.hero.maxHp;
+    applyUpgrade(this.mods, def);
+    this.hero.mods = this.mods;
+    this.owned[def.id] = (this.owned[def.id] ?? 0) + 1;
+    this.runStats.upgrades.push(def.name);
+    const gained = this.hero.maxHp - beforeMax;
+    if (gained > 0) this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + gained);
+    this.hero.heal(this.hero.maxHp * 0.2);
+    this.status = 'combat';
+    this.beginEncounter(this.encounterIndex + 1);
+  }
+
+  // ------------------------------------------------------------------ simulation
 
   update(realDelta: number): void {
     const delta = this.clock.advance(realDelta);
-    if (delta > 0 && this.status === 'combat') {
-      this.time += delta;
+    if (delta <= 0) return;
+    this.time += delta;
+    this.cinematic = Math.max(0, this.cinematic - delta);
+    this.shake = Math.max(0, this.shake - delta * 14);
+
+    if (this.status === 'combat') {
       this.step(delta);
+      return;
     }
-    this.updateCamera(realDelta);
+
+    if (this.status === 'clearing') {
+      this.hero.tickTimers(delta);
+      this.advanceHeroAnimation(delta);
+      this.updateEffects(delta);
+      this.clearTimer -= delta;
+      if (this.clearTimer <= 0) this.finishEncounter();
+      return;
+    }
+
+    if (this.status === 'victory' || this.status === 'defeat') {
+      this.hero.tickTimers(delta);
+      this.advanceHeroAnimation(delta);
+      this.updateEffects(delta);
+      this.endTimer -= delta;
+      if (this.endTimer <= 0 && !this.ended) {
+        this.ended = true;
+        this.onRunEnd?.(this.status === 'victory');
+      }
+    }
   }
 
   private step(delta: number): void {
     this.hero.tickTimers(delta);
+    if (this.mods.regenPerSec > 0 && this.hero.alive) {
+      this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + this.mods.regenPerSec * delta);
+    }
+
+    this.advanceHeroAnimation(delta);
     updateHeroAi(this, delta);
     updateEnemies(this, delta);
     this.updateProjectiles(delta);
     this.updateImpacts(delta);
-    this.reapEnemies();
-    this.stageRunner?.update(delta);
     this.updateEffects(delta);
-    if (!this.hero.alive && this.status === 'combat') this.endRun(false);
+
+    if (!this.hero.alive) {
+      this.endRun(false);
+      return;
+    }
+
+    if (this.status === 'combat' && this.spawned && !this.enemies.some((enemy) => enemy.alive)) {
+      this.status = 'clearing';
+      this.clearTimer = ENCOUNTER_CLEAR_DELAY;
+      sfx.play('clear');
+    }
   }
 
-  // ---------------------------------------------------------------- stage flow
-
-  private startStage(index: number): void {
-    this.stageIndex = index;
-    this.stageRunner = new StageRunner(this, index);
-    const stage = this.stageRunner.stage;
-    this.onStageStart?.(stage, index);
+  /** Advance the heroine's clip and resolve every gameplay event it crossed. */
+  private advanceHeroAnimation(delta: number): void {
+    if (!this.hero) return;
+    const { events, finished } = this.hero.advanceAnimation(delta);
+    for (const event of events) resolveHeroEvent(this, event);
+    if (finished) this.hero.onClipFinished();
   }
 
-  notifyStageCleared(): void {
-    const stage = this.stageRunner?.stage;
-    if (stage) this.onStageCleared?.(stage);
-    sfx.play('clear');
-  }
+  private finishEncounter(): void {
+    const encounter = this.encounter;
+    if (!encounter) return;
+    this.runStats.encountersCleared += 1;
+    this.awardCoins(encounter.reward);
 
-  advanceStage(): void {
-    if (this.status !== 'combat') return;
-    this.runStats.stagesCleared += 1;
-    if (this.stageIndex + 1 >= STAGES.length) {
+    if (encounter.kind === 'final' || this.encounterIndex >= this.encounters.length - 1) {
       this.endRun(true);
       return;
     }
-    // A no-upgrade Phase 1 run has no other sustain, so each sealed rift mends over half her health.
-    this.hero.heal(this.hero.maxHp * 0.55);
-    this.startStage(this.stageIndex + 1);
+
+    this.status = 'reward';
+    this.clock.pause();
+    this.onReward?.(encounter, this.encounterIndex);
   }
 
   endRun(victory: boolean): void {
-    if (this.status !== 'combat') return;
+    if (this.status === 'victory' || this.status === 'defeat') return;
     this.status = victory ? 'victory' : 'defeat';
-    this.clock.pause();
-    this.onRunEnd?.(victory);
+    this.endTimer = VICTORY_HOLD;
+    this.ended = false;
+    this.clearTimer = 0;
+    if (victory) {
+      this.hero.playVictory();
+      this.cinematic = 0.8;
+      sfx.play('clear');
+    } else {
+      this.hero.playDefeat();
+      sfx.play('death');
+    }
   }
 
-  // ---------------------------------------------------------------- spawning
+  // ------------------------------------------------------------------ spawning
 
-  spawnEnemy(defId: string, x: number, hpScale: number, damageScale: number): Enemy {
+  spawnEnemy(defId: string, x: number, hpScale: number, damageScale: number, standOff = 0): Enemy {
     const def = getEnemyDef(defId);
     this.enemySeq += 1;
-    // Bosses carry their own tuned stats; stage scaling on top of them made the mini-boss and the
-    // final boss mathematically unwinnable (observed: defeat at stage 5 with the golem at 30%).
-    const scaledHp = def.tier === 'boss' ? 1 : hpScale;
-    const scaledDamage = def.tier === 'boss' ? 1 : damageScale;
-    const enemy = new Enemy(`${def.id}-${this.enemySeq}`, def, clampX(x), scaledHp, scaledDamage);
+    // Boss stats are tuned for a solo duel; encounter scaling on top made the rift guardians
+    // mathematically unwinnable, so only normal formations scale.
+    const hp = def.tier === 'boss' ? 0.42 : hpScale;
+    const damage = def.tier === 'boss' ? 0.88 : damageScale;
+    const enemy = new Enemy(`${def.id}-${this.enemySeq}`, def, x, hp, damage, standOff);
     this.enemies.push(enemy);
-    if (def.tier === 'boss') this.onBossSpawn?.(def.name);
     return enemy;
   }
 
-  spawnEnemyAtEdge(defId: string, hpScale: number, damageScale: number): Enemy {
-    const side = this.rng.chance(0.5) ? 1 : -1;
-    const distance = VIEW_W * 0.58 + this.rng.range(0, 120);
-    let x = this.hero.x + side * distance;
-    if (x > ARENA_MAX_X || x < 160) x = this.hero.x - side * distance;
-    return this.spawnEnemy(defId, x, hpScale, damageScale);
-  }
-
-  summonAdds(origin: Enemy, count: number): void {
-    const stage = this.stageRunner?.stage;
-    const hpScale = (stage?.hpScale ?? 1) * 0.8;
-    const damageScale = (stage?.damageScale ?? 1) * 0.8;
-    const addIds = ['star-slime', 'shadow-bunny', 'forest-sprite'];
-    for (let i = 0; i < count; i += 1) {
-      const id = addIds[i % addIds.length]!;
-      const offset = (i - (count - 1) / 2) * 110;
-      const enemy = this.spawnEnemy(id, origin.x + offset, hpScale, damageScale);
-      enemy.x += this.rng.range(-30, 30);
-      this.addRing(enemy.x, GROUND_Y - 20, 60, origin.def.accent);
-    }
+  summonAdds(): void {
+    // Boss fights are solo by design: this intentionally does nothing.
   }
 
   announceBossPhase(enemy: Enemy): void {
@@ -253,29 +399,29 @@ export class World {
     this.onBossPhase?.(enemy.def.name);
   }
 
-  private reapEnemies(): void {
-    for (let i = this.enemies.length - 1; i >= 0; i -= 1) {
-      const enemy = this.enemies[i]!;
-      if (enemy.alive) continue;
-      this.enemies.splice(i, 1);
-      this.stageRunner?.onEnemyDefeated();
-      this.runStats.enemiesDefeated += 1;
-      if (enemy.def.tier === 'boss') this.runStats.bossesDefeated += 1;
-      this.addBurst(enemy.x, GROUND_Y - enemy.def.height * 0.45, enemy.def.accent, 14, 200);
-      this.addRing(enemy.x, GROUND_Y - 26, enemy.def.radius * 2.4, enemy.def.accent);
-      sfx.play('death');
-    }
-  }
+  // ------------------------------------------------------------------ damage
 
-  // ---------------------------------------------------------------- damage
+  /** Resolve one hit from the heroine. Centralised so upgrades apply to every source. */
+  strike(enemy: Enemy, power: number, ability: boolean): void {
+    if (!enemy.alive) return;
+    const stats = this.hero.stats;
+    const scaledPower = power * (ability ? 1 + this.mods.abilityPowerPct : 1);
+    const result = rollDamage(stats.attack, scaledPower, stats, enemy.def.defense, this.rng);
+    let amount = result.amount;
+    if (enemy.isBoss) amount *= 1 + this.mods.bossDamagePct;
+    if (enemy.def.tier === 'elite') amount *= 1 + this.mods.eliteDamagePct;
+    if (enemy.hpRatio <= this.mods.executePct) amount *= 1.6;
+    if (this.rng.chance(this.mods.extraStrikeChance)) amount *= 2;
+    this.damageEnemy(enemy, amount, result.crit);
+  }
 
   damageEnemy(enemy: Enemy, amount: number, crit: boolean): void {
     const applied = enemy.takeDamage(amount);
     if (applied <= 0) return;
     this.runStats.damageDealt += applied;
     this.addText(
-      enemy.x + this.rng.range(-10, 10),
-      GROUND_Y - enemy.def.height * 0.65,
+      enemy.x + this.rng.range(-12, 12),
+      GROUND_Y - enemy.def.height * 0.72,
       `${applied}`,
       crit,
     );
@@ -288,54 +434,82 @@ export class World {
     );
     sfx.play(crit ? 'crit' : 'hit');
     if (crit) this.shakeCamera(4);
+    if (this.mods.lifestealPct > 0) this.hero.heal(applied * this.mods.lifestealPct);
+
+    if (!enemy.alive) {
+      this.runStats.enemiesDefeated += 1;
+      if (enemy.isBoss) this.runStats.bossesDefeated += 1;
+      if (this.mods.healOnKillPct > 0) this.hero.heal(this.hero.maxHp * this.mods.healOnKillPct);
+      this.addBurst(enemy.x, GROUND_Y - enemy.def.height * 0.45, enemy.def.accent, 16, 220);
+      this.addRing(enemy.x, GROUND_Y - 30, enemy.def.radius * 2.6, enemy.def.accent);
+      sfx.play('death');
+    }
   }
 
   damageHero(rawDamage: number): void {
+    if (!this.hero.alive) return;
     const amount = rollIncoming(rawDamage, this.hero.stats.defense);
     const taken = this.hero.takeDamage(amount);
-    if (taken <= 0) return;
-    this.addText(this.hero.x, GROUND_Y - 210, `-${taken}`, false);
+    if (taken <= 0 && this.hero.shield <= 0) return;
+    // Barrier absorption is still damage the heroine had to survive, so report it too.
+    this.runStats.damageTaken += amount;
+    if (taken > 0) {
+      this.addText(this.hero.x, GROUND_Y - 236, `-${taken}`, false);
+      this.hero.playHurt();
+    }
     this.shakeCamera(3);
     sfx.play('hurt');
+    if (!this.hero.alive) this.endRun(false);
   }
 
-  /** Mend the heroine and show it, used when a wave is cleared. */
-  healHero(amount: number): void {
+  healHero(amount: number, show = true): void {
     const healed = this.hero.heal(amount);
     if (healed <= 0) return;
-    this.addText(this.hero.x, GROUND_Y - 232, `+${Math.round(healed)}`, false);
-    this.addRing(this.hero.x, GROUND_Y - 60, 110, '#9ff0c8');
-    sfx.play('heal');
+    if (show) {
+      this.addText(this.hero.x, GROUND_Y - 250, `+${Math.round(healed)}`, false);
+      this.addRing(this.hero.x, GROUND_Y - 60, 110, '#9ff0c8');
+      sfx.play('heal');
+    }
   }
 
-  /** Damage every enemy in front of the heroine. Returns the number of enemies hit. */
-  hitEnemiesInFront(range: number, power: number, strikes = 1): number {
-    const hero = this.hero;
-    const stats = hero.stats;
+  /** Cone attack used by slash abilities. Returns the number of enemies hit. */
+  hitEnemiesInFront(range: number, power: number, ability = true): number {
     let hits = 0;
     for (const enemy of [...this.enemies]) {
-      const dx = enemy.x - hero.x;
-      if (Math.sign(dx) !== hero.facing && Math.abs(dx) > 18) continue;
-      if (Math.abs(dx) > range + enemy.radius) continue;
-      const result = rollDamage(stats.attack, power, stats, enemy.def.defense, this.rng);
-      this.damageEnemy(enemy, result.amount, result.crit);
+      if (!enemy.alive) continue;
+      const dx = enemy.x - this.hero.x;
+      if (dx < -30) continue;
+      if (dx > range + enemy.radius) continue;
+      this.strike(enemy, power, ability);
       hits += 1;
     }
-    for (let i = 0; i < strikes; i += 1) {
-      this.addSlash(hero.x + hero.facing * range * 0.45, GROUND_Y - 96, hero.facing, range * 0.7, hero.def.palette.accent);
+    this.addSlash(
+      this.hero.x + 70,
+      GROUND_Y - 118,
+      this.hero.facing,
+      Math.min(220, range * 0.8),
+      this.hero.def.palette.accent,
+    );
+    return hits;
+  }
+
+  hitEnemiesAt(x: number, radius: number, power: number, ability = true): number {
+    let hits = 0;
+    for (const enemy of [...this.enemies]) {
+      if (!enemy.alive) continue;
+      if (Math.abs(enemy.x - x) > radius + enemy.radius) continue;
+      this.strike(enemy, power, ability);
+      hits += 1;
     }
     return hits;
   }
 
-  /** Damage every enemy within a radius regardless of facing. */
-  hitEnemiesAround(radius: number, power: number): number {
-    const hero = this.hero;
-    const stats = hero.stats;
+  /** Every living enemy, used by the ultimate. */
+  hitAllEnemies(power: number): number {
     let hits = 0;
     for (const enemy of [...this.enemies]) {
-      if (Math.abs(enemy.x - hero.x) > radius + enemy.radius) continue;
-      const result = rollDamage(stats.attack, power, stats, enemy.def.defense, this.rng);
-      this.damageEnemy(enemy, result.amount, result.crit);
+      if (!enemy.alive) continue;
+      this.strike(enemy, power, true);
       hits += 1;
     }
     return hits;
@@ -348,12 +522,12 @@ export class World {
       .slice(0, count);
   }
 
-  // ---------------------------------------------------------------- projectiles
+  // ------------------------------------------------------------------ projectiles
 
   spawnProjectile(projectile: Omit<Projectile, 'life' | 'hit'> & { life?: number }): void {
     this.projectiles.push({
       ...projectile,
-      life: projectile.life ?? 2.2,
+      life: projectile.life ?? 2.4,
       hit: new Set<string>(),
     });
   }
@@ -365,15 +539,14 @@ export class World {
       projectile.y += projectile.vy * delta;
       projectile.life -= delta;
 
-      let dead = projectile.life <= 0 || projectile.x < -80 || projectile.x > ARENA_WIDTH + 80;
+      let dead = projectile.life <= 0 || projectile.x < -100 || projectile.x > VIEW_W + 100;
 
       if (!dead && projectile.from === 'hero') {
         for (const enemy of [...this.enemies]) {
+          if (!enemy.alive) continue;
           if (projectile.hit.has(enemy.id)) continue;
           if (Math.abs(projectile.x - enemy.x) > projectile.radius + enemy.radius) continue;
-          const stats = this.hero.stats;
-          const result = rollDamage(stats.attack, projectile.power, stats, enemy.def.defense, this.rng);
-          this.damageEnemy(enemy, result.amount, result.crit);
+          this.strike(enemy, projectile.power, true);
           projectile.hit.add(enemy.id);
           projectile.pierce -= 1;
           if (projectile.pierce < 0) {
@@ -382,9 +555,9 @@ export class World {
           }
         }
       } else if (!dead && projectile.from === 'enemy') {
-        if (Math.abs(projectile.x - this.hero.x) < projectile.radius + 42) {
+        if (Math.abs(projectile.x - this.hero.x) < projectile.radius + 44) {
           this.damageHero(projectile.damage);
-          this.addRing(projectile.x, GROUND_Y - 100, 44, projectile.color);
+          this.addRing(projectile.x, GROUND_Y - 120, 44, projectile.color);
           dead = true;
         }
       }
@@ -393,7 +566,7 @@ export class World {
     }
   }
 
-  // ---------------------------------------------------------------- impacts
+  // ------------------------------------------------------------------ impacts
 
   addImpact(impact: Impact): void {
     this.impacts.push(impact);
@@ -402,9 +575,9 @@ export class World {
       x: impact.x,
       y: GROUND_Y - 6,
       radius: impact.radius,
-      life: impact.delay,
-      max: impact.delay,
-      color: impact.color,
+      life: Math.max(0.1, impact.delay),
+      max: Math.max(0.1, impact.delay),
+      color: impact.from === 'enemy' ? '#ff8fa8' : impact.color,
     });
   }
 
@@ -415,13 +588,9 @@ export class World {
       if (impact.delay > 0) continue;
       this.impacts.splice(i, 1);
       if (impact.from === 'hero') {
-        for (const enemy of [...this.enemies]) {
-          if (Math.abs(enemy.x - impact.x) > impact.radius + enemy.radius) continue;
-          const stats = this.hero.stats;
-          const result = rollDamage(stats.attack, impact.power, stats, enemy.def.defense, this.rng);
-          this.damageEnemy(enemy, result.amount, result.crit);
-        }
+        this.hitEnemiesAt(impact.x, impact.radius, impact.power, true);
         this.addBurst(impact.x, GROUND_Y - 60, impact.color, 18, 220);
+        sfx.play('hit');
       } else if (Math.abs(this.hero.x - impact.x) <= impact.radius + 30) {
         this.damageHero(impact.damage);
       }
@@ -430,14 +599,14 @@ export class World {
     }
   }
 
-  // ---------------------------------------------------------------- visuals
+  // ------------------------------------------------------------------ effects
 
   addSlash(x: number, y: number, facing: 1 | -1, radius: number, color: string): void {
-    this.effects.push({ kind: 'slash', x, y, facing, radius, life: 0.24, max: 0.24, color });
+    this.effects.push({ kind: 'slash', x, y, facing, radius, life: 0.26, max: 0.26, color });
   }
 
   addRing(x: number, y: number, radius: number, color: string): void {
-    this.effects.push({ kind: 'ring', x, y, radius, life: 0.45, max: 0.45, color });
+    this.effects.push({ kind: 'ring', x, y, radius, life: 0.5, max: 0.5, color });
   }
 
   addBurst(x: number, y: number, color: string, count: number, speed: number): void {
@@ -450,10 +619,10 @@ export class World {
         y,
         vx: Math.cos(angle) * power,
         vy: Math.sin(angle) * power - 40,
-        life: this.rng.range(0.24, 0.6),
-        max: 0.6,
+        life: this.rng.range(0.24, 0.62),
+        max: 0.62,
         color,
-        size: this.rng.range(1.8, 4.2),
+        size: this.rng.range(1.8, 4.4),
       });
     }
   }
@@ -463,16 +632,16 @@ export class World {
       kind: 'text',
       x,
       y,
-      vy: -46,
+      vy: -52,
       text,
       crit,
-      life: crit ? 1 : 0.8,
-      max: crit ? 1 : 0.8,
+      life: crit ? 1.05 : 0.85,
+      max: crit ? 1.05 : 0.85,
     });
   }
 
   shakeCamera(amount: number): void {
-    this.shake = Math.min(14, this.shake + amount);
+    this.shake = Math.min(16, this.shake + amount);
   }
 
   private updateEffects(delta: number): void {
@@ -491,48 +660,50 @@ export class World {
     }
   }
 
-  // ---------------------------------------------------------------- camera + hud
-
-  private updateCamera(realDelta: number): void {
-    if (!this.hero) return;
-    const target = clampCamera(this.hero.x);
-    const t = Math.min(1, CAMERA_LERP * realDelta);
-    this.cameraX += (target - this.cameraX) * t;
-    this.shake = Math.max(0, this.shake - realDelta * 12);
-  }
+  // ------------------------------------------------------------------ hud + results
 
   getHud(): HudSnapshot {
-    const runner = this.stageRunner;
-    const boss = this.enemies.find((enemy) => enemy.def.tier === 'boss' && enemy.alive);
+    const boss = this.enemies.find((enemy) => enemy.isBoss && enemy.alive);
+    const total = this.enemies.length;
+    const dead = this.enemies.filter((enemy) => !enemy.alive).length;
+    const encounter = this.encounter;
     return {
-      heroineName: this.hero.def.name,
-      hp: Math.ceil(this.hero.hp),
-      maxHp: this.hero.maxHp,
-      hpRatio: this.hero.hpRatio,
-      stageNumber: this.stageIndex + 1,
-      stageCount: STAGES.length,
-      stageName: this.stageName,
-      progress: runner?.progress ?? 0,
-      progressLabel: runner?.progressLabel ?? 'Awaiting the rift',
-      empowered: this.hero.empowered,
-      boss: boss
-        ? { name: boss.def.name, hpRatio: boss.hpRatio, phase: boss.phase }
-        : null,
+      heroineName: this.hero?.def.name ?? '',
+      hp: Math.ceil(this.hero?.hp ?? 0),
+      maxHp: this.hero?.maxHp ?? 0,
+      hpRatio: this.hero?.hpRatio ?? 0,
+      shield: this.hero?.shield ?? 0,
+      encounterNumber: Math.min(this.encounterIndex + 1, this.encounterCount),
+      encounterCount: this.encounterCount,
+      encounterTitle: encounter?.title ?? 'The rift stirs',
+      encounterKind: encounter?.kind ?? 'none',
+      progress: this.status === 'clearing' ? 1 : total === 0 ? 0 : dead / total,
+      progressLabel:
+        this.status === 'clearing'
+          ? 'Rift sealed'
+          : this.status === 'reward'
+            ? 'A Star Petal remains'
+            : `${Math.max(0, total - dead)} remaining`,
+      coins: this.runStats.coins,
+      upgrades: this.runStats.upgrades,
+      boss: boss ? { name: boss.def.name, hpRatio: boss.hpRatio, phase: boss.phase, tier: 'boss' } : null,
+      empowered: this.hero?.empowered ?? false,
     };
   }
 
   getResults(victory: boolean): RunResults {
     return {
       victory,
-      stagesCleared: this.runStats.stagesCleared,
+      encountersCleared: this.runStats.encountersCleared,
       enemiesDefeated: this.runStats.enemiesDefeated,
       bossesDefeated: this.runStats.bossesDefeated,
-      damageDealt: this.runStats.damageDealt,
+      damageDealt: Math.round(this.runStats.damageDealt),
+      damageTaken: Math.round(this.runStats.damageTaken),
       duration: this.time,
+      coins: this.runStats.coins,
+      upgrades: [...this.runStats.upgrades],
+      heroine: this.hero?.def.name ?? '',
+      world: this.worldDef?.name ?? '',
     };
   }
-}
-
-function clampCamera(x: number): number {
-  return Math.max(0, Math.min(ARENA_WIDTH - VIEW_W, x - VIEW_W * 0.5));
 }
