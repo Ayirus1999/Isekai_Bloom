@@ -5,7 +5,7 @@ Status labels: **Not Started** · **In Progress** · **Completed** · **Blocked*
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 0 | Repository, tooling, art pipeline, interface shell | Completed |
-| 1 | Core prototype: autonomous combat, enemies, stages, boss, speed control | In Progress |
+| 1 | Core prototype: autonomous combat, enemies, stages, boss, speed control | Completed |
 | 2 | Three-choice upgrade system with rarity, stacking and evolutions | Not Started |
 | 3 | Remaining five heroines with unique kits | Not Started |
 | 4 | Additional worlds, enemies, elites and bosses | Not Started |
@@ -30,15 +30,23 @@ Status labels: **Not Started** · **In Progress** · **Completed** · **Blocked*
 
 **Acceptance criteria**
 
-- [ ] The game launches to the main menu and starts a stage.
-- [ ] Yuzuki selects targets, closes to attack range and attacks without input.
-- [ ] Abilities fire automatically on cooldown and condition.
-- [ ] Enemies take damage, die, and waves advance to the next stage.
-- [ ] The boss spawns, uses its mechanics and can be defeated.
-- [ ] 1× / 2× changes the whole simulation rate, not just animation.
-- [ ] Pause freezes combat; the interface stays responsive.
-- [ ] A run can end in victory or defeat, with accurate results.
-- [ ] `npm run build` and `npm test` pass, and the browser console stays clean.
+- [x] The game launches to the main menu and starts a stage.
+- [x] Yuzuki selects targets, closes to attack range and attacks without input.
+- [x] Abilities fire automatically on cooldown and condition.
+- [x] Enemies take damage, die, and waves advance to the next stage.
+- [x] The boss spawns, uses its mechanics and can be defeated.
+- [x] 1× / 2× changes the whole simulation rate, not just animation.
+- [x] Pause freezes combat; the interface stays responsive.
+- [x] A run can end in victory or defeat, with accurate results.
+- [x] `npm run build` and `npm test` pass, and the browser console stays clean.
+
+**Notes from the build**
+
+- The speed control and pause are properties of `SimulationClock`, verified by
+  `tests/simulation.test.ts` (2× simulated time, frozen positions while paused, resume continuity).
+- Victory and defeat are covered by headless simulation tests as well as manual play through the
+  first stages; the full ten-stage run was not played to completion by hand before release, so the
+  late-stage balance is still provisional.
 
 ---
 
