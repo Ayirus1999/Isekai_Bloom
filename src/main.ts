@@ -29,6 +29,26 @@ async function boot(): Promise<void> {
     },
   });
 
+  world.onStageStart = (stage, index) => {
+    ui.showBanner(`Stage ${index + 1}`, stage.name, 1900);
+  };
+  world.onStageCleared = (stage) => {
+    ui.showBanner('Rift sealed', stage.name, 1600);
+  };
+  world.onBossSpawn = (name) => {
+    ui.showBanner('Guardian of the rift', name, 2400);
+    sfx.play('boss');
+  };
+  world.onBossPhase = (name) => {
+    ui.showBanner('Second phase', name, 1800);
+    sfx.play('boss');
+  };
+  world.onRunEnd = (victory) => {
+    paused = false;
+    ui.setPaused(false);
+    ui.showResults({ ...world.getResults(victory) });
+  };
+
   function beginRun(heroineId: string): void {
     const heroine = getHeroine(heroineId);
     if (heroine.locked) return;
@@ -38,7 +58,6 @@ async function boot(): Promise<void> {
     ui.setPaused(false);
     ui.showCombat();
     ui.setSpeedLabel(world.clock.scale);
-    ui.showBanner(`Stage ${world.stageIndex + 1}`, world.stageName, 2100);
     sfx.play('click');
   }
 

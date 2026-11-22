@@ -2,6 +2,8 @@ import { GROUND_Y, VIEW_H, VIEW_W } from '../game/constants';
 import type { World } from '../game/world';
 import type { GameAssets } from './assets';
 import { drawBackground } from './background';
+import { drawEffects, drawImpacts, drawProjectiles } from './effects';
+import { drawEnemy } from './enemies';
 import { drawHero } from './hero';
 
 interface Petal {
@@ -53,10 +55,34 @@ export class Renderer {
   draw(world: World, realTime: number, realDelta: number): void {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+
+    const shakeX = world.shake > 0 ? (Math.random() - 0.5) * world.shake : 0;
+    const shakeY = world.shake > 0 ? (Math.random() - 0.5) * world.shake * 0.6 : 0;
+
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+
     drawBackground(ctx, this.assets.meadowBackground, world.cameraX, realTime);
-    this.drawPetals(realDelta);
+    drawImpacts(ctx, world.impacts, world.cameraX);
+
+    for (const enemy of world.enemies) {
+      drawEnemy(
+        ctx,
+        enemy,
+        world.cameraX,
+        realTime,
+        enemy.def.shape === 'queen' ? this.assets.thornQueenSprite : null,
+      );
+    }
 
     drawHero(ctx, world.hero, this.assets.yuzukiSprite, world.cameraX, realTime);
+    drawProjectiles(ctx, world.projectiles, world.cameraX);
+    drawEffects(ctx, world.effects, world.cameraX);
+
+    ctx.restore();
+
+    this.drawPetals(realDelta);
+    this.drawGroundLine();
 
     if (world.hero.hp <= 0) {
       ctx.save();
@@ -64,8 +90,6 @@ export class Renderer {
       ctx.fillRect(0, 0, VIEW_W, VIEW_H);
       ctx.restore();
     }
-
-    this.drawGroundLine();
   }
 
   private drawPetals(delta: number): void {
@@ -96,7 +120,7 @@ export class Renderer {
   private drawGroundLine(): void {
     const ctx = this.ctx;
     ctx.save();
-    ctx.strokeStyle = 'rgba(255, 238, 205, 0.28)';
+    ctx.strokeStyle = 'rgba(255, 238, 205, 0.22)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, GROUND_Y + 12);
