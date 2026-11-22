@@ -6,11 +6,19 @@ An anime-inspired 2D auto-combat roguelite set in the colorful isekai world of A
 Blossom Guardian, watch her fight on her own, and shape her build with the upgrades you pick between
 stages.
 
-> **Status: In Development — Phase 1: Core Prototype**
-> The playable slice currently covers Yuzuki Hoshino, the Blossom Meadow, automatic combat, a
-> ten-stage run, a boss encounter and the 1× / 2× simulation-speed control. The upgrade system,
-> the remaining five heroines, additional worlds and permanent progression are planned — see
-> [`docs/ROADMAP.md`](docs/ROADMAP.md).
+> **Status: In Development — Phase 1 complete, prototype playable**
+> The current build is a complete run with Yuzuki Hoshino in the Blossom Meadow: autonomous combat,
+> ten stages, elites, the Thorn Queen boss, the 1× / 2× simulation-speed control and a results
+> screen. Phase 2 (the three-choice upgrade system) is next, followed by the other five heroines,
+> more worlds and permanent progression — see [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+## Screenshots
+
+| Title screen | Combat |
+| --- | --- |
+| ![Title screen](docs/screenshots/phase1-title.png) | ![Combat in the Blossom Meadow](docs/screenshots/phase1-battle.png) |
+
+Both images are captured from the current build running locally.
 
 ---
 
@@ -53,6 +61,7 @@ The game is built around four ideas:
 ### Planned
 
 - Three-choice upgrade cards with rarity, stacking, evolutions and per-heroine pools (Phase 2).
+- Painted sprites for the remaining enemies and heroines, replacing procedural art (Phase 3/6).
 - Akari, Shiori, Miyu, Rin and Airi as fully playable heroines (Phase 3).
 - Moonlit Forest, Crystal Kingdom, Ember Highlands and Celestial Ruins worlds (Phase 4).
 - Astral Coins, permanent upgrades, unlocks, achievements and save persistence (Phase 5).
